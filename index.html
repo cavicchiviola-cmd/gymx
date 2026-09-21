@@ -6,7 +6,6 @@
     <title>Workout Tracker PWA</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="manifest.json">
     <style>
         :root { --primary: #0a84ff; --bg: #000000; --card: #1c1c1e; --text: #ffffff; --text-sec: #ebebf599; --danger: #ff453a; --success: #30d158; --warning: #ffd60a; --warmup: #ff9f0a; --drop: #bf5af2; --cardio: #34c759; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; padding-top: 50px; }
@@ -23,13 +22,15 @@
         button.warning { background: var(--warning); color: black; }
         button.icon-btn { width: 36px; height: 36px; padding: 0; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 0; background: #3a3a3c; }
         
-        input[type="text"], input[type="number"] { width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 8px; background: #2c2c2e; color: white; font-size: 16px; box-sizing: border-box; transition: all 0.2s; }
+        .btn-start-huge { background: var(--success); font-size: 18px; padding: 20px; box-shadow: 0 4px 15px rgba(48, 209, 88, 0.4); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 25px; }
+        
+        input[type="text"], input[type="number"], select { width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 8px; background: #2c2c2e; color: white; font-size: 16px; box-sizing: border-box; transition: all 0.2s; outline: none; }
         input[type="color"] { background: none; border: none; width: 40px; height: 40px; padding: 0; border-radius: 50%; cursor: pointer; margin-right: 10px; }
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
         input[type="color"]::-webkit-color-swatch { border: 2px solid #3a3a3c; border-radius: 50%; }
         
         input::placeholder { color: #636366; }
-        input:focus { outline: 2px solid var(--primary); background: #3a3a3c; }
+        input:focus, select:focus { outline: 2px solid var(--primary); background: #3a3a3c; }
         
         .orange-placeholder::placeholder { color: var(--warmup) !important; opacity: 1; font-weight: bold; }
         
@@ -62,7 +63,6 @@
         .muscle-group-title { margin-top: 25px; margin-bottom: 10px; font-size: 18px; color: var(--primary); border-bottom: 1px solid #3a3a3c; padding-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
         .edit-row { display: flex; justify-content: space-between; align-items: center; background: #2c2c2e; padding: 10px; border-radius: 8px; margin-bottom: 8px; transition: opacity 0.3s; }
 
-        /* Calendario */
         .cal-header { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 12px; color: var(--text-sec); font-weight: bold; margin-bottom: 10px; }
         .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
         .cal-day { background: #2c2c2e; border-radius: 6px; min-height: 45px; padding: 4px; display: flex; flex-direction: column; align-items: center; }
@@ -71,21 +71,17 @@
         .cal-dot { width: 8px; height: 8px; border-radius: 50%; }
         .cal-empty { background: transparent; }
         
-        /* Modale */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;}
         .modal.active { display: flex; animation: fadeIn 0.2s; }
         .modal-content { background: var(--card); padding: 20px; border-radius: 14px; width: 100%; max-height: 85vh; overflow-y: auto; }
-        .close-modal { float: right; font-size: 28px; cursor: pointer; color: var(--text-sec); font-weight: bold; line-height: 1; }
+        .close-modal { float: right; font-size: 28px; cursor: pointer; color: var(--text-sec); font-weight: bold; line-height: 1; margin-left: 15px;}
         
         select.group-select { padding: 6px; border-radius: 6px; background: #1c1c1e; color: white; border: 1px solid #3a3a3c; font-size: 12px; font-weight: bold; width: 110px; }
-        
         .drag-handle { cursor: grab; font-size: 18px; margin-right: 10px; -webkit-user-drag: element; display: inline-block; }
         .drag-over { border: 2px dashed var(--warning) !important; background: rgba(255, 214, 10, 0.1) !important; }
     </style>
 </head>
 <body>
-
-    <datalist id="masterExerciseList"></datalist>
 
     <!-- DASHBOARD -->
     <div id="view-dashboard" class="view active">
@@ -97,7 +93,9 @@
             </div>
         </div>
 
-        <h2 style="margin-top: 10px; font-size: 20px;">Le mie Schede</h2>
+        <button class="btn-start-huge" onclick="apriSelezioneScheda()">▶ INIZIA ALLENAMENTO</button>
+
+        <h2 style="margin-top: 10px; font-size: 20px;">Gestione Schede</h2>
         <div id="routinesContainer"></div>
         <button onclick="creaNuovaScheda()">+ Crea Nuova Scheda</button>
 
@@ -120,7 +118,7 @@
         <button id="btnUndo" class="warning" style="display:none; font-size: 14px; padding: 10px;" onclick="undoLastAction()">↩️ Annulla Ultima Azione</button>
         
         <p style="font-size:13px; color:var(--text-sec); margin-bottom: 20px;">
-            • Clicca 📊 per vedere i pesi.<br>
+            • Clicca 📊 per vedere i pesi (e il Volume Load).<br>
             • Clicca ✏️ per rinominare il testo.<br>
             • Trascina il pallino 🟣 sopra un altro esercizio per unirli.<br>
         </p>
@@ -128,7 +126,7 @@
         <div id="archiveContainer"></div>
     </div>
 
-    <!-- EDITOR SCHEDA CON SELETTORE COLORE -->
+    <!-- EDITOR SCHEDA CON SELETTORE A TENDINA -->
     <div id="view-edit-routine" class="view">
         <div class="header-flex">
             <h2 id="editRoutineName" style="margin-bottom: 0;">Modifica Scheda</h2>
@@ -211,13 +209,13 @@
             <div class="cal-grid" id="calendarGrid"></div>
         </div>
         
-        <p style="text-align: center; color: var(--text-sec); font-size: 14px;">I dati dettagliati dei pesi sollevati per singolo esercizio sono consultabili nella sezione 🗂️ Archivio.</p>
+        <p style="text-align: center; color: var(--text-sec); font-size: 14px;">I dati dettagliati dei pesi sollevati e il Volume Load sono consultabili nella sezione 🗂️ Archivio.</p>
     </div>
 
-    <!-- MODALE DETTAGLI (Condivisa) -->
+    <!-- MODALE DETTAGLI E SELEZIONE SCHEDA -->
     <div id="dataModal" class="modal">
         <div class="modal-content">
-            <span class="close-modal" onclick="document.getElementById('dataModal').classList.remove('active')">&times;</span>
+            <span class="close-modal" onclick="chiudiModale()">&times;</span>
             <h3 id="modalTitle" style="margin-bottom: 15px; color: var(--primary);">Dettagli</h3>
             <div id="modalBody"></div>
         </div>
@@ -239,17 +237,12 @@
         "Leg Extension": "Quadricipiti", "Leg Curl": "Femorali", "Squat": "Quadricipiti",
         "Stacchi Rdl": "Femorali", "Pressa": "Quadricipiti", "Panca Piana": "Pettorali",
         "Trazioni": "Dorso", "Rematore": "Dorso", "Lento Avanti": "Spalle",
-        "Curl Bilanciere": "Bicipiti", "Pushdown": "Tricipiti",
-        "Corsa": "Cardio", "Camminata": "Cardio", "Bici": "Cardio"
+        "Corsa": "Cardio"
     };
     
     let userMuscleMap = JSON.parse(localStorage.getItem('wk_muscle_map')) || defaultMuscleMap;
-    
-    // Aggiornamento struttura defaultRoutines per includere il colore
     let defaultRoutines = [{ id: 1, name: "Lower Body / Glutei", color: "#bf5af2", exercises: ["Hip Thrust", "Bulgarian Split Squat", "Leg Extension", "Leg Curl"] }];
     let routines = JSON.parse(localStorage.getItem('wk_routines')) || defaultRoutines;
-    
-    // Sanificazione per aggiungere colore alle schede vecchie che ne sono sprovviste
     routines.forEach(r => { if(!r.color) r.color = "#0a84ff"; });
 
     let historyData = JSON.parse(localStorage.getItem('wk_history')) || [];
@@ -257,24 +250,18 @@
 
     let currentWorkout = { routineName: "", routineColor: "", exercises: [], currentExIndex: 0, recordedData: [] };
     let timerInterval, totalTimerInterval, workoutStartTime;
+    let timerEndTime = null; // Per rendere il timer resiliente
     let editIndexRoutine = -1;
 
     // --- FUNZIONI DI SUPPORTO ---
     function normalizzaNome(str) { return str.trim().toLowerCase().replace(/\b\w/g, s => s.toUpperCase()); }
-
-    function ottieniGruppoMuscolare(nomeEsercizio) {
-        let esStr = normalizzaNome(nomeEsercizio);
-        return userMuscleMap[esStr] || "Altro / Vari";
-    }
-
-    function ottieniColoreHEX(gruppo) {
-        let found = ST_GROUPS.find(g => g.name === gruppo);
-        return found ? found.hex : "#8e8e93";
-    }
-
-    function generaStileBadge(gruppo) {
-        let bg = ottieniColoreHEX(gruppo);
-        return `background: ${bg}22; color: ${bg}; border: 1px solid ${bg}55;`;
+    function ottieniGruppoMuscolare(nomeEsercizio) { return userMuscleMap[normalizzaNome(nomeEsercizio)] || "Altro / Vari"; }
+    function ottieniColoreHEX(gruppo) { let found = ST_GROUPS.find(g => g.name === gruppo); return found ? found.hex : "#8e8e93"; }
+    function generaStileBadge(gruppo) { let bg = ottieniColoreHEX(gruppo); return `background: ${bg}22; color: ${bg}; border: 1px solid ${bg}55;`; }
+    function isLightColor(color) {
+        const hex = color.replace('#', '');
+        const r = parseInt(hex.substr(0, 2), 16), g = parseInt(hex.substr(2, 2), 16), b = parseInt(hex.substr(4, 2), 16);
+        return (((r * 299) + (g * 587) + (b * 114)) / 1000) > 155;
     }
 
     function switchView(viewId) {
@@ -284,13 +271,57 @@
         if(viewId === 'view-history') renderCalendario();
     }
 
+    function chiudiModale() {
+        document.getElementById('dataModal').classList.remove('active');
+    }
+
+    // --- AUTO-SAVE LOGIC ---
+    function salvaStatoWorkout() {
+        if (!currentWorkout.routineName) return;
+        
+        let setRows = document.querySelectorAll('.set-row');
+        let currentScreenSets = [];
+        setRows.forEach(row => {
+            let kg = row.querySelector('.kg-input').value;
+            let reps = row.querySelector('.reps-input').value;
+            let type = row.dataset.type; 
+            currentScreenSets.push({ kg: kg, reps: reps, type: type });
+        });
+        
+        let stateToSave = JSON.parse(JSON.stringify(currentWorkout));
+        stateToSave.currentScreenSets = currentScreenSets;
+        stateToSave.workoutStartTime = workoutStartTime;
+        localStorage.setItem('wk_active_session', JSON.stringify(stateToSave));
+    }
+
+    function pulisciStatoWorkout() {
+        localStorage.removeItem('wk_active_session');
+    }
+
+    window.onload = () => {
+        let savedSession = localStorage.getItem('wk_active_session');
+        if (savedSession) {
+            if (confirm("Hai un allenamento in sospeso non salvato. Vuoi riprenderlo?")) {
+                let state = JSON.parse(savedSession);
+                currentWorkout = state;
+                workoutStartTime = state.workoutStartTime || Date.now();
+                
+                clearInterval(totalTimerInterval); 
+                totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); 
+                aggiornaTimerTotale();
+                
+                switchView('view-workout');
+                caricaEsercizioCorrente(true); // true indica che stiamo ripristinando
+            } else {
+                pulisciStatoWorkout();
+            }
+        }
+        renderDashboard();
+    };
+
     // --- MEMENTO PATTERN (UNDO STACK) ---
     function saveStateForUndo() {
-        undoStack.push({
-            history: JSON.parse(JSON.stringify(historyData)),
-            routines: JSON.parse(JSON.stringify(routines)),
-            map: JSON.parse(JSON.stringify(userMuscleMap))
-        });
+        undoStack.push({ history: JSON.parse(JSON.stringify(historyData)), routines: JSON.parse(JSON.stringify(routines)), map: JSON.parse(JSON.stringify(userMuscleMap)) });
         if(undoStack.length > 5) undoStack.shift(); 
         localStorage.setItem('wk_undo_stack', JSON.stringify(undoStack));
         document.getElementById('btnUndo').style.display = "block";
@@ -299,16 +330,20 @@
     function undoLastAction() {
         if(undoStack.length === 0) return;
         let lastState = undoStack.pop();
-        historyData = lastState.history;
-        routines = lastState.routines;
-        userMuscleMap = lastState.map;
-        localStorage.setItem('wk_history', JSON.stringify(historyData));
-        localStorage.setItem('wk_routines', JSON.stringify(routines));
-        localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap));
-        localStorage.setItem('wk_undo_stack', JSON.stringify(undoStack));
+        historyData = lastState.history; routines = lastState.routines; userMuscleMap = lastState.map;
+        localStorage.setItem('wk_history', JSON.stringify(historyData)); localStorage.setItem('wk_routines', JSON.stringify(routines));
+        localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); localStorage.setItem('wk_undo_stack', JSON.stringify(undoStack));
         renderArchivio();
         if(undoStack.length === 0) document.getElementById('btnUndo').style.display = "none";
-        alert("Azione annullata con successo. Dati ripristinati.");
+        alert("Azione annullata. Dati ripristinati.");
+    }
+
+    function ottieniListaEserciziUnici() {
+        let catalogo = new Set();
+        historyData.forEach(s => s.data.forEach(ex => catalogo.add(normalizzaNome(ex.name))));
+        routines.forEach(r => r.exercises.forEach(ex => catalogo.add(normalizzaNome(ex))));
+        Object.keys(userMuscleMap).forEach(ex => catalogo.add(normalizzaNome(ex)));
+        return Array.from(catalogo).sort();
     }
 
     // --- GESTIONE ARCHIVIO ---
@@ -319,26 +354,14 @@
     }
 
     function renderArchivio() {
-        let catalogo = new Set();
-        historyData.forEach(s => s.data.forEach(ex => catalogo.add(normalizzaNome(ex.name))));
-        routines.forEach(r => r.exercises.forEach(ex => catalogo.add(normalizzaNome(ex))));
-        Object.keys(userMuscleMap).forEach(ex => catalogo.add(normalizzaNome(ex)));
+        let arr = ottieniListaEserciziUnici();
+        let grouped = {}; ST_GROUPS.forEach(g => grouped[g.name] = []); grouped["Altro / Vari"] = [];
 
-        let arr = Array.from(catalogo).sort();
-        let grouped = {};
-        ST_GROUPS.forEach(g => grouped[g.name] = []);
-        grouped["Altro / Vari"] = [];
-
-        arr.forEach(ex => {
-            let grp = userMuscleMap[ex] || "Altro / Vari";
-            if(!grouped[grp]) grouped[grp] = []; 
-            grouped[grp].push(ex);
-        });
+        arr.forEach(ex => { let grp = userMuscleMap[ex] || "Altro / Vari"; if(!grouped[grp]) grouped[grp] = []; grouped[grp].push(ex); });
 
         let html = "";
         for (let [grpName, exList] of Object.entries(grouped)) {
             if (exList.length === 0) continue; 
-            
             let hex = ottieniColoreHEX(grpName);
             html += `<h3 class="muscle-group-title" style="color: ${hex};">${grpName}</h3>`;
             
@@ -348,108 +371,50 @@
                 let options = ST_GROUPS.map(g => `<option value="${g.name}" ${g.name === grpName ? 'selected' : ''}>${g.name}</option>`).join('');
                 
                 html += `
-                    <div class="edit-row" style="${rowStyle}" 
-                         draggable="true" 
-                         ondragstart="dragStart(event, '${ex}')" 
-                         ondragover="dragOver(event)" 
-                         ondragleave="dragLeave(event)"
-                         ondrop="dropMerge(event, '${ex}')">
-                        
+                    <div class="edit-row" style="${rowStyle}" draggable="true" ondragstart="dragStart(event, '${ex}')" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropMerge(event, '${ex}')">
                         <div style="display:flex; align-items:center; flex:1; overflow:hidden;">
                             <span class="drag-handle" title="Trascina su un altro per unirli">🟣</span>
                             <span style="font-weight:600; font-size:15px; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${ex}">${ex}</span>
                         </div>
-                        
                         <div style="display:flex; gap: 5px; align-items:center;">
                             <button class="icon-btn" style="width:30px; height:30px; font-size:14px;" onclick="apriStoricoEsercizio('${ex}')" title="Vedi Storico">📊</button>
-                            <button class="icon-btn" style="width:30px; height:30px; font-size:14px;" onclick="rinominaEsercizio('${ex}')" title="Rinomina Nome">✏️</button>
-                            <select class="group-select" onchange="impostaGruppo('${ex}', this.value)" title="Cambia Gruppo">
-                                <option value="Altro / Vari">Seleziona...</option>
-                                ${options}
-                            </select>
+                            <button class="icon-btn" style="width:30px; height:30px; font-size:14px;" onclick="rinominaEsercizio('${ex}')" title="Rinomina">✏️</button>
+                            <select class="group-select" onchange="impostaGruppo('${ex}', this.value)" title="Cambia Gruppo"><option value="Altro / Vari">Seleziona...</option>${options}</select>
                             <button class="icon-btn danger" style="width:30px; height:30px; font-size:14px;" onclick="eliminaEsercizioDefinitivo('${ex}')" title="Elimina Ovunque">🗑️</button>
                         </div>
-                    </div>
-                `;
+                    </div>`;
             });
         }
-        
         document.getElementById('archiveContainer').innerHTML = html;
-        let dl = document.getElementById('masterExerciseList');
-        dl.innerHTML = "";
-        arr.forEach(ex => { dl.innerHTML += `<option value="${ex}">`; });
     }
 
-    function impostaGruppo(nomeEx, nuovoGruppo) {
-        userMuscleMap[nomeEx] = nuovoGruppo;
-        localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap));
-        renderArchivio();
-    }
-
-    function rinominaEsercizio(oldName) {
-        let nuovo = prompt(`Modifica il nome di "${oldName}". I dati storici verranno mantenuti:`, oldName);
-        if(nuovo && nuovo.trim() !== "" && normalizzaNome(nuovo) !== normalizzaNome(oldName)) {
-            eseguiUnione(oldName, nuovo);
-        }
-    }
-
-    function dragStart(e, exName) {
-        e.dataTransfer.setData("text/plain", exName);
-        e.dataTransfer.effectAllowed = "move";
-    }
-    function dragOver(e) {
-        e.preventDefault();
-        e.currentTarget.classList.add('drag-over');
-    }
-    function dragLeave(e) {
-        e.currentTarget.classList.remove('drag-over');
-    }
+    function impostaGruppo(nomeEx, nuovoGruppo) { userMuscleMap[nomeEx] = nuovoGruppo; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); renderArchivio(); }
+    function rinominaEsercizio(oldName) { let nuovo = prompt(`Rinomina "${oldName}":`, oldName); if(nuovo && nuovo.trim() !== "" && normalizzaNome(nuovo) !== normalizzaNome(oldName)) eseguiUnione(oldName, nuovo); }
+    function dragStart(e, exName) { e.dataTransfer.setData("text/plain", exName); e.dataTransfer.effectAllowed = "move"; }
+    function dragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+    function dragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
     function dropMerge(e, targetExName) {
-        e.preventDefault();
-        e.currentTarget.classList.remove('drag-over');
+        e.preventDefault(); e.currentTarget.classList.remove('drag-over');
         let sourceExName = e.dataTransfer.getData("text/plain");
-        
-        if(sourceExName && sourceExName !== targetExName) {
-            if(confirm(`VUOI UNIRE GLI ESERCIZI?\n\nTutti i dati di "${sourceExName}" verranno trasferiti dentro "${targetExName}".\nL'azione può essere annullata.`)) {
-                eseguiUnione(sourceExName, targetExName);
-            }
-        }
+        if(sourceExName && sourceExName !== targetExName) { if(confirm(`VUOI UNIRE "${sourceExName}" IN "${targetExName}"?`)) eseguiUnione(sourceExName, targetExName); }
     }
     
     function eseguiUnione(oldN, newN) {
-        saveStateForUndo();
-        let oldNorm = normalizzaNome(oldN);
-        let newNorm = normalizzaNome(newN);
-        let oldGrp = userMuscleMap[oldNorm];
-        
+        saveStateForUndo(); let oldNorm = normalizzaNome(oldN); let newNorm = normalizzaNome(newN); let oldGrp = userMuscleMap[oldNorm];
         historyData.forEach(s => s.data.forEach(ex => { if(normalizzaNome(ex.name) === oldNorm) ex.name = newNorm; }));
         routines.forEach(r => r.exercises.forEach((ex, i, arr) => { if(normalizzaNome(ex) === oldNorm) arr[i] = newNorm; }));
-        
-        if(oldGrp && !userMuscleMap[newNorm]) {
-            userMuscleMap[newNorm] = oldGrp;
-        }
+        if(oldGrp && !userMuscleMap[newNorm]) userMuscleMap[newNorm] = oldGrp;
         delete userMuscleMap[oldNorm];
-        
-        localStorage.setItem('wk_history', JSON.stringify(historyData));
-        localStorage.setItem('wk_routines', JSON.stringify(routines));
-        localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap));
-        renderArchivio();
+        localStorage.setItem('wk_history', JSON.stringify(historyData)); localStorage.setItem('wk_routines', JSON.stringify(routines)); localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); renderArchivio();
     }
 
     function eliminaEsercizioDefinitivo(exName) {
-        if(confirm(`ELIMINAZIONE GLOBALE\n\nStai per cancellare "${exName}" da tutte le schede e da tutto lo storico.\nL'azione può essere annullata. Procedere?`)) {
-            saveStateForUndo();
-            let norm = normalizzaNome(exName);
-            
+        if(confirm(`ELIMINAZIONE GLOBALE\n\nCancellare "${exName}" da tutte le schede e storico?`)) {
+            saveStateForUndo(); let norm = normalizzaNome(exName);
             routines.forEach(r => { r.exercises = r.exercises.filter(e => normalizzaNome(e) !== norm); });
             historyData.forEach(s => { s.data = s.data.filter(e => normalizzaNome(e.name) !== norm); });
-            historyData = historyData.filter(s => s.data.length > 0);
-            delete userMuscleMap[norm];
-            
-            localStorage.setItem('wk_history', JSON.stringify(historyData));
-            localStorage.setItem('wk_routines', JSON.stringify(routines));
-            localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap));
-            renderArchivio();
+            historyData = historyData.filter(s => s.data.length > 0); delete userMuscleMap[norm];
+            localStorage.setItem('wk_history', JSON.stringify(historyData)); localStorage.setItem('wk_routines', JSON.stringify(routines)); localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); renderArchivio();
         }
     }
 
@@ -457,7 +422,6 @@
         let normEx = normalizzaNome(exName);
         let gruppo = ottieniGruppoMuscolare(normEx);
         let bodyHtml = "";
-        
         let logs = [];
         historyData.forEach(sess => {
             let found = sess.data.find(e => normalizzaNome(e.name) === normEx);
@@ -465,24 +429,29 @@
         });
         
         if(logs.length === 0) {
-            bodyHtml = "<p>Nessun dato registrato per questo esercizio.</p>";
+            bodyHtml = "<p>Nessun dato registrato.</p>";
         } else {
             logs.reverse().forEach(log => {
+                let volumeTotale = 0;
                 let stringaSerie = log.sets.map((s, i) => {
                     if (gruppo === "Cardio") {
                         let kmStr = parseFloat(s.kg) > 0 ? ` | ${s.kg} km` : '';
                         return `${s.reps} min${kmStr}`;
                     } else {
+                        if (s.kg && s.reps) volumeTotale += (parseFloat(s.kg) * parseInt(s.reps));
                         let prefs = s.type === 'warmup' ? 'W' : (s.type === 'drop' ? '↳D' : `S${i+1}`);
                         let colorStr = s.type === 'warmup' ? 'color:var(--warmup);' : (s.type === 'drop' ? 'color:var(--drop);' : 'color:var(--text);');
                         return `<span style="${colorStr} margin-right:8px; display:inline-block;">• ${prefs}: ${s.reps}x${s.kg}kg</span>`;
                     }
                 }).join('<br>');
                 
+                let volumeHtml = (gruppo !== "Cardio" && volumeTotale > 0) ? `<div style="margin-top: 6px; font-size: 13px; color: var(--warning);">Volume Load: <b>${volumeTotale} kg</b></div>` : '';
+                
                 bodyHtml += `
                     <div style="background: #2c2c2e; padding: 12px; border-radius: 8px; margin-bottom: 10px;">
                         <div style="font-size: 12px; color: var(--text-sec); margin-bottom: 5px;">${log.date} - ${log.routine}</div>
                         <div style="font-size: 15px; font-weight: bold; line-height: 1.4;">${stringaSerie}</div>
+                        ${volumeHtml}
                     </div>
                 `;
             });
@@ -493,31 +462,24 @@
         document.getElementById('dataModal').classList.add('active');
     }
 
-    // --- CALENDARIO E DETTAGLI (Source of Truth: Storico Reale) ---
+    // --- CALENDARIO ---
     function renderCalendario() {
-        const grid = document.getElementById('calendarGrid');
-        grid.innerHTML = "";
-        const oggi = new Date();
-        const mese = oggi.getMonth();
-        const anno = oggi.getFullYear();
+        const grid = document.getElementById('calendarGrid'); grid.innerHTML = "";
+        const oggi = new Date(); const mese = oggi.getMonth(); const anno = oggi.getFullYear();
         const nomiMesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
         document.getElementById('calMonthTitle').innerText = `${nomiMesi[mese]} ${anno}`;
 
         const giorniMese = new Date(anno, mese + 1, 0).getDate();
-        let primoGiorno = new Date(anno, mese, 1).getDay();
-        primoGiorno = primoGiorno === 0 ? 6 : primoGiorno - 1; 
+        let primoGiorno = new Date(anno, mese, 1).getDay(); primoGiorno = primoGiorno === 0 ? 6 : primoGiorno - 1; 
 
-        // Raggruppa gli allenamenti per giorno, leggendo il COLORE DELLA SCHEDA dallo storico
         let mapGiorniAllenati = {};
         historyData.forEach(session => {
             let partiData = session.date.split('/');
             if(partiData.length === 3) {
-                let d = parseInt(partiData[0]); let m = parseInt(partiData[1]) - 1; let y = parseInt(partiData[2]);
+                let d = parseInt(partiData[0]), m = parseInt(partiData[1]) - 1, y = parseInt(partiData[2]);
                 if (m === mese && y === anno) {
                     if (!mapGiorniAllenati[d]) mapGiorniAllenati[d] = new Set();
-                    // Utilizza il colore della routine salvato, oppure fallback generico/cardio
-                    let sessionColor = session.routineColor || (session.routine === "Sessione Cardio" ? "#34c759" : "#0a84ff");
-                    mapGiorniAllenati[d].add(sessionColor);
+                    mapGiorniAllenati[d].add(session.routineColor || (session.routine === "Sessione Cardio" ? "#34c759" : "#0a84ff"));
                 }
             }
         });
@@ -526,16 +488,11 @@
 
         for (let giorno = 1; giorno <= giorniMese; giorno++) {
             let isOggi = (giorno === oggi.getDate()) ? 'color: var(--primary); font-weight: 800; font-size: 14px;' : '';
-            let palliniHTML = "";
-            let hasWorkout = mapGiorniAllenati[giorno];
-            
-            if (hasWorkout) {
-                [...mapGiorniAllenati[giorno]].forEach(coloreHex => { palliniHTML += `<span class="cal-dot" style="background-color: ${coloreHex};"></span>`; });
-            }
+            let palliniHTML = ""; let hasWorkout = mapGiorniAllenati[giorno];
+            if (hasWorkout) { [...mapGiorniAllenati[giorno]].forEach(coloreHex => { palliniHTML += `<span class="cal-dot" style="background-color: ${coloreHex};"></span>`; }); }
             
             let dateStr = `${giorno.toString().padStart(2, '0')}/${(mese+1).toString().padStart(2, '0')}/${anno}`;
             let clickAction = hasWorkout ? `onclick="apriDettagliCalendario('${dateStr}')" style="cursor:pointer;"` : '';
-
             grid.innerHTML += `<div class="cal-day" ${clickAction}><span class="cal-day-num" style="${isOggi}">${giorno}</span><div class="cal-dots">${palliniHTML}</div></div>`;
         }
     }
@@ -546,37 +503,26 @@
         
         sessioniDelGiorno.forEach((sess) => {
             let rColor = sess.routineColor || (sess.routine === "Sessione Cardio" ? "#34c759" : "#0a84ff");
-            
-            // Rendering esplicito e immediato degli esercizi eseguiti (Senza Fisarmonica)
             let exHtml = sess.data.map(ex => {
                 let gruppo = ottieniGruppoMuscolare(ex.name);
                 let setsHtml = ex.sets.map((s, i) => {
-                    if (gruppo === "Cardio") {
-                        return `${s.reps} min ${parseFloat(s.kg) > 0 ? '| ' + s.kg + ' km' : ''}`;
-                    } else {
+                    if (gruppo === "Cardio") return `${s.reps} min ${parseFloat(s.kg) > 0 ? '| ' + s.kg + ' km' : ''}`;
+                    else {
                         let prefs = s.type === 'warmup' ? 'W' : (s.type === 'drop' ? '↳D' : `S${i+1}`);
                         return `${prefs}: ${s.reps}x${s.kg}kg`;
                     }
                 }).join(' | ');
-                return `
-                    <div style="margin-top: 12px; font-size: 14px;">
-                        <b style="color: white;">${ex.name}</b><br>
-                        <span style="color: var(--text-sec); font-size: 13px;">${setsHtml}</span>
-                    </div>
-                `;
+                return `<div style="margin-top: 12px; font-size: 14px;"><b style="color: white;">${ex.name}</b><br><span style="color: var(--text-sec); font-size: 13px;">${setsHtml}</span></div>`;
             }).join('');
 
             bodyHtml += `
                 <div style="background: #2c2c2e; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 5px solid ${rColor};">
                     <h4 style="color: ${rColor}; margin: 0; font-size: 18px; text-transform: uppercase;">${sess.routine}</h4>
                     <p style="font-size: 12px; color: var(--text-sec); margin: 5px 0 10px 0;">Esercizi totali: ${sess.data.length}</p>
-                    <div style="border-top: 1px solid #3a3a3c; padding-top: 5px;">
-                        ${exHtml}
-                    </div>
+                    <div style="border-top: 1px solid #3a3a3c; padding-top: 5px;">${exHtml}</div>
                 </div>
             `;
         });
-        
         document.getElementById('modalTitle').innerText = `Dati del ${dataStr}`;
         document.getElementById('modalBody').innerHTML = bodyHtml;
         document.getElementById('dataModal').classList.add('active');
@@ -584,32 +530,18 @@
 
     // --- DASHBOARD E SCHEDE ---
     function loggaCardioOggi() {
-        let tipo = prompt("Tipo di Attività (es. Corsa, Bici, Camminata):", "Corsa");
-        if(!tipo) return;
-        let min = prompt("Minuti di durata:", "30");
-        if(!min) return;
-        let km = prompt("Chilometri percorsi (Lascia a 0 se non li sai):", "5");
-        
+        let tipo = prompt("Tipo di Attività (es. Corsa, Bici):", "Corsa"); if(!tipo) return;
+        let min = prompt("Minuti di durata:", "30"); if(!min) return;
+        let km = prompt("Chilometri percorsi (0 se non li sai):", "5");
         let dateStr = new Date().toLocaleDateString('it-IT');
         let nomeNorm = normalizzaNome(tipo);
-        
-        userMuscleMap[nomeNorm] = "Cardio";
-        localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap));
-        
-        historyData.push({
-            date: dateStr,
-            routine: "Sessione Cardio",
-            routineColor: "#34c759", // Colore forzato per salvataggio
-            data: [{ name: nomeNorm, sets: [{ kg: parseFloat(km||0), reps: parseInt(min||0), type: 'normal' }] }]
-        });
-        localStorage.setItem('wk_history', JSON.stringify(historyData));
-        renderCalendario();
-        alert("Sessione Cardio registrata!");
+        userMuscleMap[nomeNorm] = "Cardio"; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap));
+        historyData.push({ date: dateStr, routine: "Sessione Cardio", routineColor: "#34c759", data: [{ name: nomeNorm, sets: [{ kg: parseFloat(km||0), reps: parseInt(min||0), type: 'normal' }] }] });
+        localStorage.setItem('wk_history', JSON.stringify(historyData)); renderCalendario(); alert("Cardio registrato!");
     }
 
     function renderDashboard() {
-        const container = document.getElementById('routinesContainer');
-        container.innerHTML = "";
+        const container = document.getElementById('routinesContainer'); container.innerHTML = "";
         routines.forEach((r, index) => {
             let rColor = r.color || "#0a84ff";
             container.innerHTML += `
@@ -619,24 +551,25 @@
                         <button class="danger" style="width: auto; padding: 6px 12px; font-size: 12px; margin: 0;" onclick="eliminaScheda(${index})">X</button>
                     </div>
                     <h3 style="margin-right: 120px; display:flex; align-items:center; gap:8px;">
-                        <span style="width:12px; height:12px; border-radius:50%; background-color:${rColor};"></span>
-                        ${r.name}
+                        <span style="width:12px; height:12px; border-radius:50%; background-color:${rColor};"></span>${r.name}
                     </h3>
-                    <p style="color:var(--text-sec); font-size:14px; margin-bottom: 20px;">${r.exercises.join(' • ')}</p>
-                    <button style="background-color: ${rColor}; color: ${isLightColor(rColor) ? 'black' : 'white'};" onclick="avviaWorkout(${index})">Inizia Allenamento</button>
+                    <p style="color:var(--text-sec); font-size:14px; margin-bottom: 5px;">${r.exercises.join(' • ')}</p>
                 </div>
             `;
         });
     }
 
-    // Funzione utility per calcolare la leggibilità del testo sui bottoni
-    function isLightColor(color) {
-        const hex = color.replace('#', '');
-        const r = parseInt(hex.substr(0, 2), 16);
-        const g = parseInt(hex.substr(2, 2), 16);
-        const b = parseInt(hex.substr(4, 2), 16);
-        const brightness = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-        return brightness > 155;
+    // SELEZIONE SCHEDA (IL TASTO VERDE)
+    function apriSelezioneScheda() {
+        if(routines.length === 0) return alert("Crea prima una scheda!");
+        let html = routines.map((r, i) => {
+            let rColor = r.color || '#0a84ff';
+            let textColor = isLightColor(rColor) ? 'black' : 'white';
+            return `<button style="background:${rColor}; color:${textColor}; padding:20px; margin-bottom:15px; font-size:18px; border-radius:12px; font-weight:bold; box-shadow: 0 4px 10px rgba(0,0,0,0.5);" onclick="avviaWorkout(${i}); chiudiModale();">➔ ${r.name.toUpperCase()}</button>`;
+        }).join('');
+        document.getElementById('modalTitle').innerText = "Quale scheda facciamo oggi?";
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('dataModal').classList.add('active');
     }
 
     function apriEditorScheda(index) { 
@@ -647,73 +580,69 @@
         switchView('view-edit-routine'); 
     }
     
-    function aggiornaColoreScheda(colorHex) {
-        routines[editIndexRoutine].color = colorHex;
-    }
+    function aggiornaColoreScheda(colorHex) { routines[editIndexRoutine].color = colorHex; }
 
+    // RENDER EDITOR CON SELECT AL POSTO DEL DATALIST
     function renderEditorEsercizi() {
         const container = document.getElementById('editExercisesContainer'); container.innerHTML = "";
         let exArr = routines[editIndexRoutine].exercises;
+        
         exArr.forEach((ex, i) => {
             container.innerHTML += `
                 <div class="edit-row">
                     <span style="font-weight: 500; font-size: 15px;">${i+1}. ${ex}</span>
                     <div style="display:flex; gap: 5px;">
-                        <button class="icon-btn" onclick="spostaEsercizio(${i}, -1)" ${i === 0 ? 'disabled style="opacity:0.3"' : ''}>↑</button>
-                        <button class="icon-btn" onclick="spostaEsercizio(${i}, 1)" ${i === exArr.length - 1 ? 'disabled style="opacity:0.3"' : ''}>↓</button>
-                        <button class="icon-btn danger" onclick="rimuoviEsercizioDaScheda(${i})">X</button>
+                        <button class="action-btn" onclick="spostaEsercizio(${i}, -1)" ${i === 0 ? 'disabled style="opacity:0.3"' : ''}>↑</button>
+                        <button class="action-btn" onclick="spostaEsercizio(${i}, 1)" ${i === exArr.length - 1 ? 'disabled style="opacity:0.3"' : ''}>↓</button>
+                        <button class="action-btn danger-btn" onclick="rimuoviEsercizioDaScheda(${i})">X</button>
                     </div>
                 </div>
             `;
         });
-        container.innerHTML += `<div style="margin-top: 20px; display: flex; gap: 10px;"><input type="text" id="newExInput" list="masterExerciseList" placeholder="Cerca o scrivi esercizio..." style="margin-bottom: 0;"><button class="secondary" style="width: auto; margin-bottom: 0; padding: 12px 15px;" onclick="aggiungiEsercizioDatalist()">Aggiungi</button></div>`;
+
+        let opzioniEsercizi = ottieniListaEserciziUnici().map(ex => `<option value="${ex}">${ex}</option>`).join('');
+
+        container.innerHTML += `
+            <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
+                <select id="newExSelect" style="flex: 1; margin-bottom: 0;">
+                    <option value="" disabled selected>Seleziona esercizio...</option>
+                    ${opzioniEsercizi}
+                    <option value="_NEW_" style="color: var(--primary); font-weight: bold;">+ Crea Nuovo Esercizio...</option>
+                </select>
+                <button class="secondary" style="width: auto; margin-bottom: 0; padding: 12px 15px;" onclick="aggiungiEsercizioSelect()">Aggiungi</button>
+            </div>
+        `;
     }
     
-    function aggiungiEsercizioDatalist() {
-        let inputEl = document.getElementById('newExInput'); let nome = inputEl.value;
-        if (nome.trim() !== "") { 
-            let n = normalizzaNome(nome);
-            routines[editIndexRoutine].exercises.push(n); 
-            renderEditorEsercizi(); 
-        }
+    function aggiungiEsercizioSelect() {
+        let selectEl = document.getElementById('newExSelect'); let nome = selectEl.value;
+        if (nome === "_NEW_") {
+            let nuovoNome = prompt("Inserisci il nome del nuovo esercizio:");
+            if (nuovoNome && nuovoNome.trim() !== "") {
+                let n = normalizzaNome(nuovoNome);
+                routines[editIndexRoutine].exercises.push(n); 
+                if (!userMuscleMap[n]) { userMuscleMap[n] = "Altro / Vari"; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); }
+                renderEditorEsercizi(); 
+            }
+        } else if (nome && nome.trim() !== "") { 
+            routines[editIndexRoutine].exercises.push(nome); renderEditorEsercizi(); 
+        } else { alert("Seleziona un esercizio dal menu."); }
     }
     
-    function spostaEsercizio(index, direzione) {
-        let arr = routines[editIndexRoutine].exercises; if (index + direzione < 0 || index + direzione >= arr.length) return;
-        let temp = arr[index]; arr[index] = arr[index + direzione]; arr[index + direzione] = temp; renderEditorEsercizi();
-    }
+    function spostaEsercizio(index, direzione) { let arr = routines[editIndexRoutine].exercises; if (index + direzione < 0 || index + direzione >= arr.length) return; let temp = arr[index]; arr[index] = arr[index + direzione]; arr[index + direzione] = temp; renderEditorEsercizi(); }
     function rimuoviEsercizioDaScheda(index) { routines[editIndexRoutine].exercises.splice(index, 1); renderEditorEsercizi(); }
-    
-    function salvaModificheScheda() { 
-        localStorage.setItem('wk_routines', JSON.stringify(routines)); 
-        switchView('view-dashboard'); 
-    }
-    
+    function salvaModificheScheda() { localStorage.setItem('wk_routines', JSON.stringify(routines)); switchView('view-dashboard'); }
     function eliminaScheda(index) { if(confirm("Eliminare definitivamente questa scheda?")) { routines.splice(index, 1); localStorage.setItem('wk_routines', JSON.stringify(routines)); renderDashboard(); } }
-    
-    function creaNuovaScheda() { 
-        let nome = prompt("Nome della nuova scheda:"); 
-        if(nome) { 
-            routines.push({ id: Date.now(), name: nome, color: "#0a84ff", exercises: [] }); 
-            localStorage.setItem('wk_routines', JSON.stringify(routines)); 
-            apriEditorScheda(routines.length - 1); 
-        } 
-    }
+    function creaNuovaScheda() { let nome = prompt("Nome della nuova scheda:"); if(nome) { routines.push({ id: Date.now(), name: nome, color: "#0a84ff", exercises: [] }); localStorage.setItem('wk_routines', JSON.stringify(routines)); apriEditorScheda(routines.length - 1); } }
 
     // --- WORKOUT ATTIVO ---
     function avviaWorkout(routineIndex) {
         let routine = routines[routineIndex];
         if (routine.exercises.length === 0) return alert("Scheda vuota! Aggiungi esercizi modificandola.");
         
-        // Passa anche il colore della scheda all'oggetto della sessione corrente
-        currentWorkout = { 
-            routineName: routine.name, 
-            routineColor: routine.color || "#0a84ff",
-            exercises: [...routine.exercises], 
-            currentExIndex: 0, 
-            recordedData: [] 
-        };
+        pulisciStatoWorkout(); // Pulisce vecchi stati residui
         
+        currentWorkout = { routineName: routine.name, routineColor: routine.color || "#0a84ff", exercises: [...routine.exercises], currentExIndex: 0, recordedData: [] };
         workoutStartTime = Date.now();
         clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
         switchView('view-workout'); caricaEsercizioCorrente();
@@ -721,59 +650,46 @@
     
     function aggiornaTimerTotale() {
         let elapsedSec = Math.floor((Date.now() - workoutStartTime) / 1000);
-        let h = Math.floor(elapsedSec / 3600); let m = Math.floor((elapsedSec % 3600) / 60).toString().padStart(2, '0'); let s = (elapsedSec % 60).toString().padStart(2, '0');
+        let h = Math.floor(elapsedSec / 3600), m = Math.floor((elapsedSec % 3600) / 60).toString().padStart(2, '0'), s = (elapsedSec % 60).toString().padStart(2, '0');
         document.getElementById('totalWorkoutTimer').innerText = h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
     }
     
     function posticipaEsercizioCorrente() {
         if (currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) return alert("Questo è l'ultimo esercizio rimasto.");
         let esPosticipato = currentWorkout.exercises.splice(currentWorkout.currentExIndex, 1)[0];
-        currentWorkout.exercises.push(esPosticipato); caricaEsercizioCorrente();
+        currentWorkout.exercises.push(esPosticipato); caricaEsercizioCorrente(); salvaStatoWorkout();
     }
 
     function sostituisciEsercizioCorrente() {
-        let nuovo = prompt("Nuovo esercizio (modifica solo per questa sessione):");
-        if(nuovo && nuovo.trim() !== "") {
-            currentWorkout.exercises[currentWorkout.currentExIndex] = normalizzaNome(nuovo);
-            caricaEsercizioCorrente();
-        }
+        let nuovo = prompt("Nuovo esercizio (modifica solo per oggi):");
+        if(nuovo && nuovo.trim() !== "") { currentWorkout.exercises[currentWorkout.currentExIndex] = normalizzaNome(nuovo); caricaEsercizioCorrente(); salvaStatoWorkout(); }
     }
 
     function aggiungiEsercizioInCoda() {
-        let nuovo = prompt("Nome del nuovo esercizio da aggiungere alla sessione:");
-        if(nuovo && nuovo.trim() !== "") {
-            currentWorkout.exercises.push(normalizzaNome(nuovo));
-            document.getElementById('woProgress').innerText = `Esercizio ${currentWorkout.currentExIndex + 1} di ${currentWorkout.exercises.length}`;
-            alert(`"${normalizzaNome(nuovo)}" aggiunto alla fine della scheda per oggi!`);
-        }
+        let nuovo = prompt("Nome esercizio da aggiungere alla fine:");
+        if(nuovo && nuovo.trim() !== "") { currentWorkout.exercises.push(normalizzaNome(nuovo)); document.getElementById('woProgress').innerText = `Esercizio ${currentWorkout.currentExIndex + 1} di ${currentWorkout.exercises.length}`; salvaStatoWorkout(); alert(`Aggiunto!`); }
     }
 
     function aggiornaBarbellMath() {
         let exName = currentWorkout.exercises[currentWorkout.currentExIndex].toLowerCase();
         let container = document.getElementById('barbellMathContainer');
+        // Vincolo specifico richiesto per l'Hip Thrust
         if (!exName.includes("hip thrust")) { container.style.display = "none"; return; }
         
         container.style.display = "block";
-        let inputs = document.querySelectorAll('.kg-input');
-        let ultimoValore = 0;
+        let inputs = document.querySelectorAll('.kg-input'); let ultimoValore = 0;
         inputs.forEach(inp => { if(inp.value) ultimoValore = parseFloat(inp.value); });
         
         let resultSpan = document.getElementById('barbellMathResult');
         if(ultimoValore <= 20) { resultSpan.innerText = "Solo bilanciere vuoto o peso troppo basso."; return; }
 
-        let perLato = (ultimoValore - 20) / 2;
-        let piastre = [25, 20, 15, 10, 5, 2.5, 1.25];
-        let caricamento = [];
-        
-        for (let p of piastre) {
-            let count = Math.floor(perLato / p);
-            if (count > 0) { caricamento.push(`${count}x${p}kg`); perLato = (perLato % p).toFixed(2); }
-        }
+        let perLato = (ultimoValore - 20) / 2; let piastre = [25, 20, 15, 10, 5, 2.5, 1.25]; let caricamento = [];
+        for (let p of piastre) { let count = Math.floor(perLato / p); if (count > 0) { caricamento.push(`${count}x${p}kg`); perLato = (perLato % p).toFixed(2); } }
         resultSpan.innerText = caricamento.length > 0 ? `Per lato: [ ${caricamento.join(' ] + [ ')} ]` : "Peso non standardizzabile.";
     }
 
-    function caricaEsercizioCorrente() {
-        clearInterval(timerInterval); document.getElementById('timerDisplay').innerText = "00:00";
+    function caricaEsercizioCorrente(isRestoring = false) {
+        clearInterval(timerInterval); timerEndTime = null; document.getElementById('timerDisplay').innerText = "00:00";
         let exName = currentWorkout.exercises[currentWorkout.currentExIndex];
         let gruppoMusc = ottieniGruppoMuscolare(exName);
         document.getElementById('woRoutineName').innerText = currentWorkout.routineName;
@@ -789,8 +705,7 @@
                 pastSets = foundEx.sets;
                 let validNormalSet = pastSets.find(s => s.type === 'normal' || s.type === undefined);
                 if (validNormalSet && validNormalSet.kg && validNormalSet.reps) {
-                    let targKg = (parseFloat(validNormalSet.kg) + 2.5).toFixed(1).replace('.0','');
-                    let targReps = parseInt(validNormalSet.reps) + 1;
+                    let targKg = (parseFloat(validNormalSet.kg) + 2.5).toFixed(1).replace('.0',''); let targReps = parseInt(validNormalSet.reps) + 1;
                     targetTextEl.innerText = `🎯 Target Overload: ${targKg}kg x ${validNormalSet.reps} rep OPPURE ${validNormalSet.kg}kg x ${targReps} rep`;
                     targetTextEl.style.display = "block";
                 }
@@ -800,20 +715,23 @@
         
         document.getElementById('setsContainer').innerHTML = "";
         
-        if (pastSets && pastSets.length > 0) {
+        if (isRestoring && currentWorkout.currentScreenSets && currentWorkout.currentScreenSets.length > 0) {
+            // Ripristina l'input esatto che stavi digitando
+            currentWorkout.currentScreenSets.forEach(s => aggiungiSerie(s.type || 'normal', null, s.kg, s.reps));
+        } else if (pastSets && pastSets.length > 0) {
             pastSets.forEach(vecchiaSerie => aggiungiSerie(vecchiaSerie.type || 'normal', vecchiaSerie));
         } else {
             aggiungiSerie('normal');
         }
 
         aggiornaBarbellMath(); 
-
         let btnNext = document.getElementById('btnNextExercise');
         if(currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) {
             btnNext.innerText = "Termina e Salva 🏁"; btnNext.style.background = "var(--success)";
         } else {
             btnNext.innerText = "Esercizio Succ. ➔"; btnNext.style.background = "var(--primary)";
         }
+        salvaStatoWorkout();
     }
 
     function controllaCompletamentoRiga(inputElement) {
@@ -823,139 +741,99 @@
         if (kg !== "" && reps !== "") row.classList.add('completed');
         else row.classList.remove('completed');
         
-        aggiornaBarbellMath(); 
+        aggiornaBarbellMath();
+        salvaStatoWorkout();
     }
 
     function toggleWarmup(btnElement) {
         let row = btnElement.closest('.set-row');
-        if (row.dataset.type === 'normal') {
-            row.dataset.type = 'warmup';
-            row.className = row.className.replace('type-normal', 'type-warmup');
-            btnElement.classList.add('active-w');
-        } else if (row.dataset.type === 'warmup') {
-            row.dataset.type = 'normal';
-            row.className = row.className.replace('type-warmup', 'type-normal');
-            btnElement.classList.remove('active-w');
-        }
+        if (row.dataset.type === 'normal') { row.dataset.type = 'warmup'; row.className = row.className.replace('type-normal', 'type-warmup'); btnElement.classList.add('active-w'); } 
+        else if (row.dataset.type === 'warmup') { row.dataset.type = 'normal'; row.className = row.className.replace('type-warmup', 'type-normal'); btnElement.classList.remove('active-w'); }
+        salvaStatoWorkout();
     }
 
-    function aggiungiSerie(tipoAtteso = 'normal', pastSet = null) {
+    function aggiungiSerie(tipoAtteso = 'normal', pastSet = null, restoreKg = "", restoreReps = "") {
         const container = document.getElementById('setsContainer');
-        
         let mainSetsCount = container.querySelectorAll('.set-row.type-normal, .set-row.type-warmup').length;
         let setNumStr = tipoAtteso === 'drop' ? '↳' : `${mainSetsCount + 1}°`;
         
-        let phKg = pastSet ? pastSet.kg : "Kg";
-        let phReps = pastSet ? pastSet.reps : "Reps";
-        
-        let isWarmup = pastSet && pastSet.type === 'warmup';
-        let customPhClass = isWarmup ? "orange-placeholder" : "";
+        let phKg = pastSet ? pastSet.kg : "Kg"; let phReps = pastSet ? pastSet.reps : "Reps";
+        let isWarmup = pastSet && pastSet.type === 'warmup'; let customPhClass = isWarmup ? "orange-placeholder" : "";
 
-        const div = document.createElement('div');
-        div.className = `set-row type-${tipoAtteso}`;
-        div.dataset.type = tipoAtteso;
+        const div = document.createElement('div'); div.className = `set-row type-${tipoAtteso}`; div.dataset.type = tipoAtteso;
         
         let btnWarmup = tipoAtteso !== 'drop' ? `<button class="action-btn ${tipoAtteso === 'warmup' ? 'active-w' : ''}" onclick="toggleWarmup(this)">W</button>` : '';
-        let btnDrop = tipoAtteso !== 'drop' ? `<button class="action-btn" style="background:#bf5af2;" onclick="aggiungiSerie('drop')">↳D</button>` : '';
+        let btnDrop = tipoAtteso !== 'drop' ? `<button class="action-btn" style="background:#bf5af2;" onclick="aggiungiSerie('drop'); salvaStatoWorkout();">↳D</button>` : '';
 
         div.innerHTML = `
             <span class="set-number" style="width:25px; font-weight:bold; color: var(--text-sec); text-align:center;">${setNumStr}</span>
-            <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" oninput="controllaCompletamentoRiga(this)">
-            <input type="number" placeholder="${phReps}" class="reps-input ${customPhClass}" oninput="controllaCompletamentoRiga(this)">
+            <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${restoreKg}" oninput="controllaCompletamentoRiga(this)">
+            <input type="number" placeholder="${phReps}" class="reps-input ${customPhClass}" value="${restoreReps}" oninput="controllaCompletamentoRiga(this)">
             <div class="set-controls">
-                ${btnWarmup}
-                ${btnDrop}
+                ${btnWarmup}${btnDrop}
                 <button class="action-btn danger-btn" onclick="rimuoviSerie(this)">X</button>
             </div>
         `;
         
+        if (restoreKg && restoreReps) div.classList.add('completed');
+
         if (tipoAtteso === 'drop' && event && event.target) {
             let rowOrigin = event.target.closest('.set-row');
-            if(rowOrigin && rowOrigin.nextSibling) {
-                container.insertBefore(div, rowOrigin.nextSibling);
-            } else {
-                container.appendChild(div);
-            }
-        } else {
-            container.appendChild(div);
-        }
+            if(rowOrigin && rowOrigin.nextSibling) container.insertBefore(div, rowOrigin.nextSibling);
+            else container.appendChild(div);
+        } else { container.appendChild(div); }
         
         aggiornaNumerazioneSerie();
     }
 
     function aggiornaNumerazioneSerie() {
         let count = 1;
-        document.querySelectorAll('.set-row').forEach(row => {
-            if (row.dataset.type !== 'drop') {
-                row.querySelector('.set-number').innerText = count + "°";
-                count++;
-            }
-        });
+        document.querySelectorAll('.set-row').forEach(row => { if (row.dataset.type !== 'drop') { row.querySelector('.set-number').innerText = count + "°"; count++; } });
     }
 
-    function rimuoviSerie(btnElement) {
-        btnElement.closest('.set-row').remove();
-        aggiornaNumerazioneSerie();
-        aggiornaBarbellMath();
-    }
+    function rimuoviSerie(btnElement) { btnElement.closest('.set-row').remove(); aggiornaNumerazioneSerie(); aggiornaBarbellMath(); salvaStatoWorkout(); }
 
     function playAudioAlert() {
         try {
             let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            let oscillator = audioCtx.createOscillator();
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); 
-            oscillator.connect(audioCtx.destination);
-            oscillator.start();
-            oscillator.stop(audioCtx.currentTime + 0.5); 
+            let oscillator = audioCtx.createOscillator(); oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); oscillator.connect(audioCtx.destination);
+            oscillator.start(); oscillator.stop(audioCtx.currentTime + 0.5); 
         } catch(e) { console.log("Audio non supportato."); }
     }
 
+    // TIMER RESILIENTE (TIMESTAMP)
     function avviaTimer(secondi) {
         clearInterval(timerInterval);
-        let endTime = Date.now() + (secondi * 1000);
-        
+        timerEndTime = Date.now() + (secondi * 1000);
         let formatTime = (sec) => `${Math.floor(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}`;
         document.getElementById('timerDisplay').innerText = formatTime(secondi);
         
         timerInterval = setInterval(() => {
-            let remain = Math.ceil((endTime - Date.now()) / 1000);
+            let remain = Math.ceil((timerEndTime - Date.now()) / 1000);
             if(remain <= 0) {
-                clearInterval(timerInterval);
-                document.getElementById('timerDisplay').innerText = "00:00";
+                clearInterval(timerInterval); document.getElementById('timerDisplay').innerText = "00:00"; timerEndTime = null;
                 if(navigator.vibrate) navigator.vibrate([300, 150, 300]);
                 playAudioAlert();
-            } else {
-                document.getElementById('timerDisplay').innerText = formatTime(remain);
-            }
+            } else { document.getElementById('timerDisplay').innerText = formatTime(remain); }
         }, 1000);
     }
 
     function prossimoEsercizio() {
-        let setRows = document.querySelectorAll('.set-row');
-        let setsData = [];
+        let setRows = document.querySelectorAll('.set-row'); let setsData = [];
         setRows.forEach(row => {
-            let kg = row.querySelector('.kg-input').value;
-            let reps = row.querySelector('.reps-input').value;
-            let type = row.dataset.type; 
+            let kg = row.querySelector('.kg-input').value, reps = row.querySelector('.reps-input').value, type = row.dataset.type; 
             if(kg !== "" && reps !== "") setsData.push({ kg: parseFloat(kg), reps: parseInt(reps), type: type });
         });
         
         if(setsData.length > 0) currentWorkout.recordedData.push({ name: currentWorkout.exercises[currentWorkout.currentExIndex], sets: setsData });
 
         if(currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) {
-            clearInterval(totalTimerInterval);
+            clearInterval(totalTimerInterval); timerEndTime = null;
             let dateStr = new Date().toLocaleDateString('it-IT');
-            
-            // Salvataggio snapshot colore scheda nello storico
-            historyData.push({ 
-                date: dateStr, 
-                routine: currentWorkout.routineName, 
-                routineColor: currentWorkout.routineColor,
-                data: currentWorkout.recordedData 
-            });
-            
+            historyData.push({ date: dateStr, routine: currentWorkout.routineName, routineColor: currentWorkout.routineColor, data: currentWorkout.recordedData });
             localStorage.setItem('wk_history', JSON.stringify(historyData));
+            pulisciStatoWorkout();
             alert(`Allenamento completato in ${document.getElementById('totalWorkoutTimer').innerText} e salvato!`);
             switchView('view-dashboard');
         } else {
@@ -966,23 +844,19 @@
 
     function annullaWorkout() {
         if(confirm("Vuoi davvero annullare questo allenamento? I dati non verranno salvati.")) {
-            clearInterval(totalTimerInterval);
-            switchView('view-dashboard');
+            clearInterval(totalTimerInterval); timerEndTime = null; pulisciStatoWorkout(); switchView('view-dashboard');
         }
     }
 
     function esportaBackup() {
         const dataStr = JSON.stringify({ routines: routines, history: historyData, map: userMuscleMap }, null, 2);
-        const blob = new Blob([dataStr], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a"); a.href = url;
-        a.download = `backup_allenamento_${new Date().toLocaleDateString('it-IT').replace(/\//g, '-')}.json`;
+        const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = `backup_allenamento_${new Date().toLocaleDateString('it-IT').replace(/\//g, '-')}.json`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     }
 
     function importaBackup(event) {
-        const file = event.target.files[0]; if (!file) return;
-        const reader = new FileReader();
+        const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
         reader.onload = function(e) {
             try {
                 const importato = JSON.parse(e.target.result);
@@ -990,15 +864,13 @@
                     routines = importato.routines; historyData = importato.history;
                     if (importato.map) { userMuscleMap = importato.map; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); }
                     localStorage.setItem('wk_routines', JSON.stringify(routines)); localStorage.setItem('wk_history', JSON.stringify(historyData));
-                    renderDashboard(); alert("Dati importati con successo!");
+                    renderDashboard(); alert("Dati importati!");
                 }
-            } catch (error) { alert("Errore critico durante la lettura del file."); }
-            event.target.value = "";
-        };
-        reader.readAsText(file);
+            } catch (error) { alert("Errore lettura file."); } event.target.value = "";
+        }; reader.readAsText(file);
     }
 
-    renderDashboard();
 </script>
 </body>
 </html>
+
