@@ -22,7 +22,7 @@
         button.warning { background: var(--warning); color: black; }
         button.icon-btn { width: 36px; height: 36px; padding: 0; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 0; background: #3a3a3c; }
         
-        .btn-start-huge { background: var(--success); font-size: 18px; padding: 20px; box-shadow: 0 4px 15px rgba(48, 209, 88, 0.4); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 25px; }
+        .btn-start-huge { background: var(--success); color: black; font-weight: 900; font-size: 20px; padding: 25px; box-shadow: 0 4px 20px rgba(48, 209, 88, 0.3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 30px; border-radius: 16px; }
         
         input[type="text"], input[type="number"], select { width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 8px; background: #2c2c2e; color: white; font-size: 16px; box-sizing: border-box; transition: all 0.2s; outline: none; }
         input[type="color"] { background: none; border: none; width: 40px; height: 40px; padding: 0; border-radius: 50%; cursor: pointer; margin-right: 10px; }
@@ -49,7 +49,7 @@
         .badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; margin-left: 8px; letter-spacing: 0.5px; vertical-align: middle; }
         
         .history-text { color: var(--text-sec); font-size: 14px; margin-bottom: 15px; padding-left: 10px; border-left: 3px solid var(--primary); }
-        .target-text { color: var(--warning); font-size: 14px; margin-bottom: 10px; padding-left: 10px; border-left: 3px solid var(--warning); font-weight: bold; background: rgba(255, 214, 10, 0.1); border-radius: 0 8px 8px 0; padding-top: 5px; padding-bottom: 5px; }
+        .target-text { color: var(--warning); font-size: 14px; margin-bottom: 10px; padding-left: 10px; border-left: 3px solid var(--warning); background: rgba(255, 214, 10, 0.1); border-radius: 0 8px 8px 0; padding-top: 8px; padding-bottom: 8px; line-height: 1.4; }
         
         .barbell-math { display: none; background: #2c2c2e; border: 1px solid #3a3a3c; border-radius: 8px; padding: 10px; margin-bottom: 15px; font-size: 14px; }
         .barbell-math span { color: var(--primary); font-weight: bold; }
@@ -95,12 +95,15 @@
 
         <button class="btn-start-huge" onclick="apriSelezioneScheda()">▶ INIZIA ALLENAMENTO</button>
 
-        <h2 style="margin-top: 10px; font-size: 20px;">Gestione Schede</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h2 style="margin: 0; font-size: 14px; color: var(--text-sec); text-transform: uppercase; letter-spacing: 1px;">Gestione Schede</h2>
+            <button class="secondary" style="width: auto; padding: 4px 10px; font-size: 12px; margin: 0;" onclick="creaNuovaScheda()">+ Nuova</button>
+        </div>
+        
         <div id="routinesContainer"></div>
-        <button onclick="creaNuovaScheda()">+ Crea Nuova Scheda</button>
 
         <hr style="border-color: #3a3a3c; margin: 25px 0 15px 0;">
-        <h3 style="font-size: 16px; color: var(--text-sec);">Backup e Dati</h3>
+        <h3 style="font-size: 16px; color: var(--text-sec);">Backup Dati</h3>
         <div style="display: flex; gap: 10px;">
             <button class="secondary" style="font-size: 14px;" onclick="esportaBackup()">💾 Esporta</button>
             <button class="secondary" style="font-size: 14px;" onclick="document.getElementById('importFile').click()">📂 Importa</button>
@@ -118,7 +121,7 @@
         <button id="btnUndo" class="warning" style="display:none; font-size: 14px; padding: 10px;" onclick="undoLastAction()">↩️ Annulla Ultima Azione</button>
         
         <p style="font-size:13px; color:var(--text-sec); margin-bottom: 20px;">
-            • Clicca 📊 per vedere i pesi (e il Volume Load).<br>
+            • Clicca 📊 per vedere i pesi e il <b>Volume Load</b>.<br>
             • Clicca ✏️ per rinominare il testo.<br>
             • Trascina il pallino 🟣 sopra un altro esercizio per unirli.<br>
         </p>
@@ -137,7 +140,7 @@
             <input type="color" id="editRoutineColor" onchange="aggiornaColoreScheda(this.value)">
             <div>
                 <h4 style="margin:0; font-size: 16px;">Colore Identificativo</h4>
-                <p style="margin:0; font-size: 12px; color: var(--text-sec);">Questo colore apparirà nel calendario storico.</p>
+                <p style="margin:0; font-size: 12px; color: var(--text-sec);">Verrà usato per il pallino nel calendario.</p>
             </div>
         </div>
 
@@ -165,7 +168,7 @@
                 </div>
             </div>
             
-            <p class="target-text" id="woTargetData" style="display:none;">Target Overload: Calcolando...</p>
+            <p class="target-text" id="woTargetData" style="display:none;"></p>
             
             <div id="barbellMathContainer" class="barbell-math">
                 Setup Dischi (Bilanciere 20kg): <br>
@@ -222,7 +225,6 @@
     </div>
 
 <script>
-    // --- DIZIONARIO UFFICIALE E DATI ---
     const ST_GROUPS = [
         { name: "Glutei", hex: "#bf5af2" }, { name: "Quadricipiti", hex: "#0a84ff" },
         { name: "Femorali", hex: "#ff9f0a" }, { name: "Pettorali", hex: "#ff453a" },
@@ -250,10 +252,9 @@
 
     let currentWorkout = { routineName: "", routineColor: "", exercises: [], currentExIndex: 0, recordedData: [] };
     let timerInterval, totalTimerInterval, workoutStartTime;
-    let timerEndTime = null; // Per rendere il timer resiliente
+    let timerEndTime = null; 
     let editIndexRoutine = -1;
 
-    // --- FUNZIONI DI SUPPORTO ---
     function normalizzaNome(str) { return str.trim().toLowerCase().replace(/\b\w/g, s => s.toUpperCase()); }
     function ottieniGruppoMuscolare(nomeEsercizio) { return userMuscleMap[normalizzaNome(nomeEsercizio)] || "Altro / Vari"; }
     function ottieniColoreHEX(gruppo) { let found = ST_GROUPS.find(g => g.name === gruppo); return found ? found.hex : "#8e8e93"; }
@@ -275,10 +276,8 @@
         document.getElementById('dataModal').classList.remove('active');
     }
 
-    // --- AUTO-SAVE LOGIC ---
     function salvaStatoWorkout() {
         if (!currentWorkout.routineName) return;
-        
         let setRows = document.querySelectorAll('.set-row');
         let currentScreenSets = [];
         setRows.forEach(row => {
@@ -287,16 +286,13 @@
             let type = row.dataset.type; 
             currentScreenSets.push({ kg: kg, reps: reps, type: type });
         });
-        
         let stateToSave = JSON.parse(JSON.stringify(currentWorkout));
         stateToSave.currentScreenSets = currentScreenSets;
         stateToSave.workoutStartTime = workoutStartTime;
         localStorage.setItem('wk_active_session', JSON.stringify(stateToSave));
     }
 
-    function pulisciStatoWorkout() {
-        localStorage.removeItem('wk_active_session');
-    }
+    function pulisciStatoWorkout() { localStorage.removeItem('wk_active_session'); }
 
     window.onload = () => {
         let savedSession = localStorage.getItem('wk_active_session');
@@ -305,21 +301,13 @@
                 let state = JSON.parse(savedSession);
                 currentWorkout = state;
                 workoutStartTime = state.workoutStartTime || Date.now();
-                
-                clearInterval(totalTimerInterval); 
-                totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); 
-                aggiornaTimerTotale();
-                
-                switchView('view-workout');
-                caricaEsercizioCorrente(true); // true indica che stiamo ripristinando
-            } else {
-                pulisciStatoWorkout();
-            }
+                clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
+                switchView('view-workout'); caricaEsercizioCorrente(true);
+            } else { pulisciStatoWorkout(); }
         }
         renderDashboard();
     };
 
-    // --- MEMENTO PATTERN (UNDO STACK) ---
     function saveStateForUndo() {
         undoStack.push({ history: JSON.parse(JSON.stringify(historyData)), routines: JSON.parse(JSON.stringify(routines)), map: JSON.parse(JSON.stringify(userMuscleMap)) });
         if(undoStack.length > 5) undoStack.shift(); 
@@ -346,7 +334,6 @@
         return Array.from(catalogo).sort();
     }
 
-    // --- GESTIONE ARCHIVIO ---
     function apriArchivio() {
         switchView('view-archive');
         if(undoStack.length > 0) document.getElementById('btnUndo').style.display = "block";
@@ -462,7 +449,6 @@
         document.getElementById('dataModal').classList.add('active');
     }
 
-    // --- CALENDARIO ---
     function renderCalendario() {
         const grid = document.getElementById('calendarGrid'); grid.innerHTML = "";
         const oggi = new Date(); const mese = oggi.getMonth(); const anno = oggi.getFullYear();
@@ -528,7 +514,6 @@
         document.getElementById('dataModal').classList.add('active');
     }
 
-    // --- DASHBOARD E SCHEDE ---
     function loggaCardioOggi() {
         let tipo = prompt("Tipo di Attività (es. Corsa, Bici):", "Corsa"); if(!tipo) return;
         let min = prompt("Minuti di durata:", "30"); if(!min) return;
@@ -540,26 +525,25 @@
         localStorage.setItem('wk_history', JSON.stringify(historyData)); renderCalendario(); alert("Cardio registrato!");
     }
 
+    // DASHBOARD CON SCHEDE GRIGIE AMMINISTRATIVE
     function renderDashboard() {
         const container = document.getElementById('routinesContainer'); container.innerHTML = "";
         routines.forEach((r, index) => {
-            let rColor = r.color || "#0a84ff";
             container.innerHTML += `
-                <div class="card" style="border-top: 4px solid ${rColor};">
-                    <div style="position: absolute; top: 15px; right: 15px; display: flex; gap: 5px;">
-                        <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 12px; margin: 0;" onclick="apriEditorScheda(${index})">Modifica</button>
-                        <button class="danger" style="width: auto; padding: 6px 12px; font-size: 12px; margin: 0;" onclick="eliminaScheda(${index})">X</button>
+                <div style="background: #2c2c2e; border: 1px solid #3a3a3c; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; padding: 15px; margin-bottom: 12px;">
+                    <div style="flex: 1; overflow: hidden; padding-right: 10px;">
+                        <h3 style="margin: 0; font-size: 16px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${r.name}</h3>
+                        <p style="color:var(--text-sec); font-size:12px; margin: 4px 0 0 0;">${r.exercises.length} esercizi</p>
                     </div>
-                    <h3 style="margin-right: 120px; display:flex; align-items:center; gap:8px;">
-                        <span style="width:12px; height:12px; border-radius:50%; background-color:${rColor};"></span>${r.name}
-                    </h3>
-                    <p style="color:var(--text-sec); font-size:14px; margin-bottom: 5px;">${r.exercises.join(' • ')}</p>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="secondary" style="width: 40px; height: 40px; padding: 0; margin: 0; display: flex; justify-content: center; align-items: center; border-radius: 8px; font-size: 16px;" onclick="apriEditorScheda(${index})" title="Modifica">✏️</button>
+                        <button class="danger" style="width: 40px; height: 40px; padding: 0; margin: 0; display: flex; justify-content: center; align-items: center; border-radius: 8px; font-size: 16px;" onclick="eliminaScheda(${index})" title="Elimina">🗑️</button>
+                    </div>
                 </div>
             `;
         });
     }
 
-    // SELEZIONE SCHEDA (IL TASTO VERDE)
     function apriSelezioneScheda() {
         if(routines.length === 0) return alert("Crea prima una scheda!");
         let html = routines.map((r, i) => {
@@ -582,7 +566,6 @@
     
     function aggiornaColoreScheda(colorHex) { routines[editIndexRoutine].color = colorHex; }
 
-    // RENDER EDITOR CON SELECT AL POSTO DEL DATALIST
     function renderEditorEsercizi() {
         const container = document.getElementById('editExercisesContainer'); container.innerHTML = "";
         let exArr = routines[editIndexRoutine].exercises;
@@ -635,13 +618,11 @@
     function eliminaScheda(index) { if(confirm("Eliminare definitivamente questa scheda?")) { routines.splice(index, 1); localStorage.setItem('wk_routines', JSON.stringify(routines)); renderDashboard(); } }
     function creaNuovaScheda() { let nome = prompt("Nome della nuova scheda:"); if(nome) { routines.push({ id: Date.now(), name: nome, color: "#0a84ff", exercises: [] }); localStorage.setItem('wk_routines', JSON.stringify(routines)); apriEditorScheda(routines.length - 1); } }
 
-    // --- WORKOUT ATTIVO ---
     function avviaWorkout(routineIndex) {
         let routine = routines[routineIndex];
         if (routine.exercises.length === 0) return alert("Scheda vuota! Aggiungi esercizi modificandola.");
         
-        pulisciStatoWorkout(); // Pulisce vecchi stati residui
-        
+        pulisciStatoWorkout(); 
         currentWorkout = { routineName: routine.name, routineColor: routine.color || "#0a84ff", exercises: [...routine.exercises], currentExIndex: 0, recordedData: [] };
         workoutStartTime = Date.now();
         clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
@@ -673,7 +654,6 @@
     function aggiornaBarbellMath() {
         let exName = currentWorkout.exercises[currentWorkout.currentExIndex].toLowerCase();
         let container = document.getElementById('barbellMathContainer');
-        // Vincolo specifico richiesto per l'Hip Thrust
         if (!exName.includes("hip thrust")) { container.style.display = "none"; return; }
         
         container.style.display = "block";
@@ -703,11 +683,23 @@
             let foundEx = historyData[i].data.find(e => normalizzaNome(e.name) === normalizzaNome(exName));
             if(foundEx) {
                 pastSets = foundEx.sets;
-                let validNormalSet = pastSets.find(s => s.type === 'normal' || s.type === undefined);
-                if (validNormalSet && validNormalSet.kg && validNormalSet.reps) {
-                    let targKg = (parseFloat(validNormalSet.kg) + 2.5).toFixed(1).replace('.0',''); let targReps = parseInt(validNormalSet.reps) + 1;
-                    targetTextEl.innerText = `🎯 Target Overload: ${targKg}kg x ${validNormalSet.reps} rep OPPURE ${validNormalSet.kg}kg x ${targReps} rep`;
-                    targetTextEl.style.display = "block";
+                
+                // --- NUOVA LOGICA PROGRESSIVE OVERLOAD (MIGLIOR SET) ---
+                let normalSets = pastSets.filter(s => s.type === 'normal' || s.type === undefined);
+                if (normalSets.length > 0) {
+                    let bestSet = normalSets.reduce((best, current) => {
+                        if (!best) return current;
+                        if (parseFloat(current.kg) > parseFloat(best.kg)) return current;
+                        if (parseFloat(current.kg) === parseFloat(best.kg) && parseInt(current.reps) > parseInt(best.reps)) return current;
+                        return best;
+                    }, null);
+
+                    if (bestSet && bestSet.kg && bestSet.reps) {
+                        let targKg = (parseFloat(bestSet.kg) + 2.5).toFixed(1).replace('.0',''); 
+                        let targReps = parseInt(bestSet.reps) + 1;
+                        targetTextEl.innerHTML = `<span style="font-size: 12px; font-weight: normal; color: var(--text-sec); display: block; margin-bottom: 3px;">🏆 Top Set precedente: ${bestSet.kg}kg x ${bestSet.reps} rep</span>🎯 Target Overload: ${targKg}kg x ${bestSet.reps} rep OPPURE ${bestSet.kg}kg x ${targReps} rep`;
+                        targetTextEl.style.display = "block";
+                    }
                 }
                 break;
             }
@@ -716,7 +708,6 @@
         document.getElementById('setsContainer').innerHTML = "";
         
         if (isRestoring && currentWorkout.currentScreenSets && currentWorkout.currentScreenSets.length > 0) {
-            // Ripristina l'input esatto che stavi digitando
             currentWorkout.currentScreenSets.forEach(s => aggiungiSerie(s.type || 'normal', null, s.kg, s.reps));
         } else if (pastSets && pastSets.length > 0) {
             pastSets.forEach(vecchiaSerie => aggiungiSerie(vecchiaSerie.type || 'normal', vecchiaSerie));
@@ -802,7 +793,6 @@
         } catch(e) { console.log("Audio non supportato."); }
     }
 
-    // TIMER RESILIENTE (TIMESTAMP)
     function avviaTimer(secondi) {
         clearInterval(timerInterval);
         timerEndTime = Date.now() + (secondi * 1000);
