@@ -95,12 +95,18 @@
 
         <button class="btn-start-huge" onclick="apriSelezioneScheda()">▶ INIZIA ALLENAMENTO</button>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h2 style="margin: 0; font-size: 14px; color: var(--text-sec); text-transform: uppercase; letter-spacing: 1px;">Gestione Schede</h2>
-            <button class="secondary" style="width: auto; padding: 4px 10px; font-size: 12px; margin: 0;" onclick="creaNuovaScheda()">+ Nuova</button>
-        </div>
+        <!-- SEZIONE GESTIONE SCHEDE (CHIUSA DI DEFAULT) -->
+        <button class="secondary" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-radius: 12px; margin-bottom: 10px; background: #2c2c2e; border: 1px solid #3a3a3c;" onclick="toggleGestioneSchede()">
+            <span style="font-weight: bold; color: white;">⚙️ Gestione Schede</span>
+            <span id="toggleSchedeIcon" style="font-size: 14px; color: var(--text-sec);">▼ Apri</span>
+        </button>
         
-        <div id="routinesContainer"></div>
+        <div id="sezioneGestioneSchede" style="display: none; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 12px; margin-top: 5px;">
+                <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 12px; margin: 0; background: #3a3a3c;" onclick="creaNuovaScheda()">+ Nuova</button>
+            </div>
+            <div id="routinesContainer"></div>
+        </div>
 
         <hr style="border-color: #3a3a3c; margin: 25px 0 15px 0;">
         <h3 style="font-size: 16px; color: var(--text-sec);">Backup Dati</h3>
@@ -263,6 +269,19 @@
         const hex = color.replace('#', '');
         const r = parseInt(hex.substr(0, 2), 16), g = parseInt(hex.substr(2, 2), 16), b = parseInt(hex.substr(4, 2), 16);
         return (((r * 299) + (g * 587) + (b * 114)) / 1000) > 155;
+    }
+
+    // NUOVA FUNZIONE: Toggle per il menu della Gestione Schede
+    function toggleGestioneSchede() {
+        const sez = document.getElementById('sezioneGestioneSchede');
+        const icon = document.getElementById('toggleSchedeIcon');
+        if (sez.style.display === 'none') {
+            sez.style.display = 'block';
+            icon.innerText = '▲ Chiudi';
+        } else {
+            sez.style.display = 'none';
+            icon.innerText = '▼ Apri';
+        }
     }
 
     function switchView(viewId) {
@@ -863,4 +882,3 @@
 </script>
 </body>
 </html>
-
