@@ -196,7 +196,8 @@
         </div>
         <div style="display:flex; gap:10px;">
             <button class="danger" onclick="annullaWorkout()">Annulla</button>
-            <button id="btnNextExercise" onclick="prossimoEsercizio()">Esercizio Succ. ➔</button>
+            <button id="btnPrevExercise" class="secondary" onclick="precedenteEsercizio()" style="display:none; flex: 0.5;">⬅️ Indietro</button>
+            <button id="btnNextExercise" onclick="prossimoEsercizio()" style="flex: 1;">Esercizio Succ. ➔</button>
         </div>
     </div>
 
@@ -687,6 +688,32 @@
         resultSpan.innerText = caricamento.length > 0 ? `Per lato: [ ${caricamento.join(' ] + [ ')} ]` : "Peso non standardizzabile.";
     }
 
+    function salvaDatiEsercizioUI() {
+        let setRows = document.querySelectorAll('.set-row');
+        let setsData = [];
+        setRows.forEach(row => {
+            let kg = row.querySelector('.kg-input').value;
+            let reps = row.querySelector('.reps-input').value;
+            let type = row.dataset.type; 
+            if(kg !== "" || reps !== "") {
+                setsData.push({ kg: kg, reps: reps, type: type });
+            }
+        });
+        
+        currentWorkout.recordedData[currentWorkout.currentExIndex] = { 
+            name: currentWorkout.exercises[currentWorkout.currentExIndex], 
+            sets: setsData 
+        };
+    }
+
+    function precedenteEsercizio() {
+        salvaDatiEsercizioUI(); 
+        if (currentWorkout.currentExIndex > 0) {
+            currentWorkout.currentExIndex--;
+            caricaEsercizioCorrente();
+        }
+    }
+
     function caricaEsercizioCorrente(isRestoring = false) {
         clearInterval(timerInterval); timerEndTime = null; document.getElementById('timerDisplay').innerText = "00:00";
         let exName = currentWorkout.exercises[currentWorkout.currentExIndex];
@@ -696,6 +723,7 @@
         document.getElementById('woExerciseName').innerHTML = `${exName} <span class="badge" style="${generaStileBadge(gruppoMusc)}">${gruppoMusc}</span>`;
         
         let pastSets = null;
+        let activeSessionSets = currentWorkout.recordedData[currentWorkout.currentExIndex]?.sets;
         let targetTextEl = document.getElementById('woTargetData'); targetTextEl.style.display = "none";
         
         for (let i = historyData.length - 1; i >= 0; i--) {
@@ -703,7 +731,6 @@
             if(foundEx) {
                 pastSets = foundEx.sets;
                 
-                // --- NUOVA LOGICA PROGRESSIVE OVERLOAD (MIGLIOR SET) ---
                 let normalSets = pastSets.filter(s => s.type === 'normal' || s.type === undefined);
                 if (normalSets.length > 0) {
                     let bestSet = normalSets.reduce((best, current) => {
@@ -726,7 +753,9 @@
         
         document.getElementById('setsContainer').innerHTML = "";
         
-        if (isRestoring && currentWorkout.currentScreenSets && currentWorkout.currentScreenSets.length > 0) {
+        if (activeSessionSets && activeSessionSets.length > 0) {
+            activeSessionSets.forEach(s => aggiungiSerie(s.type || 'normal', null, s.kg, s.reps));
+        } else if (isRestoring && currentWorkout.currentScreenSets && currentWorkout.currentScreenSets.length > 0) {
             currentWorkout.currentScreenSets.forEach(s => aggiungiSerie(s.type || 'normal', null, s.kg, s.reps));
         } else if (pastSets && pastSets.length > 0) {
             pastSets.forEach(vecchiaSerie => aggiungiSerie(vecchiaSerie.type || 'normal', vecchiaSerie));
@@ -735,6 +764,12 @@
         }
 
         aggiornaBarbellMath(); 
+        
+        let btnPrev = document.getElementById('btnPrevExercise');
+        if (btnPrev) {
+            btnPrev.style.display = currentWorkout.currentExIndex > 0 ? "inline-block" : "none";
+        }
+
         let btnNext = document.getElementById('btnNextExercise');
         if(currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) {
             btnNext.innerText = "Termina e Salva 🏁"; btnNext.style.background = "var(--success)";
@@ -829,18 +864,31 @@
     }
 
     function prossimoEsercizio() {
-        let setRows = document.querySelectorAll('.set-row'); let setsData = [];
-        setRows.forEach(row => {
-            let kg = row.querySelector('.kg-input').value, reps = row.querySelector('.reps-input').value, type = row.dataset.type; 
-            if(kg !== "" && reps !== "") setsData.push({ kg: parseFloat(kg), reps: parseInt(reps), type: type });
-        });
+        salvaDatiEsercizioUI(); 
         
-        if(setsData.length > 0) currentWorkout.recordedData.push({ name: currentWorkout.exercises[currentWorkout.currentExIndex], sets: setsData });
-
         if(currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) {
             clearInterval(totalTimerInterval); timerEndTime = null;
             let dateStr = new Date().toLocaleDateString('it-IT');
-            historyData.push({ date: dateStr, routine: currentWorkout.routineName, routineColor: currentWorkout.routineColor, data: currentWorkout.recordedData });
+            
+            let finalData = currentWorkout.recordedData.filter(ex => ex && ex.sets.length > 0)
+                .map(ex => {
+                    return {
+                        name: ex.name,
+                        sets: ex.sets.filter(s => s.kg !== "" && s.reps !== "").map(s => ({
+                            kg: parseFloat(s.kg), 
+                            reps: parseInt(s.reps), 
+                            type: s.type
+                        }))
+                    };
+                }).filter(ex => ex.sets.length > 0);
+
+            historyData.push({ 
+                date: dateStr, 
+                routine: currentWorkout.routineName, 
+                routineColor: currentWorkout.routineColor, 
+                data: finalData 
+            });
+            
             localStorage.setItem('wk_history', JSON.stringify(historyData));
             pulisciStatoWorkout();
             alert(`Allenamento completato in ${document.getElementById('totalWorkoutTimer').innerText} e salvato!`);
