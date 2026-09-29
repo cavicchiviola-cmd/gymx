@@ -7,7 +7,20 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <style>
-        :root { --primary: #0a84ff; --bg: #000000; --card: #1c1c1e; --text: #ffffff; --text-sec: #ebebf599; --danger: #ff453a; --success: #30d158; --warning: #ffd60a; --warmup: #ff9f0a; --drop: #bf5af2; --cardio: #34c759; }
+        :root { 
+            --primary: #0a84ff; 
+            --bg: #000000; 
+            --card: #1c1c1e; 
+            --text: #ffffff; 
+            --text-sec: #ebebf599; 
+            --danger: #ff453a; 
+            --success: #30d158; 
+            --warning: #ffd60a; 
+            --warmup: #ff9f0a; 
+            --drop: #bf5af2; 
+            --cardio: #34c759;
+            --suggest-color: #64d2ff;
+        }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; padding-top: 50px; }
         h1, h2, h3, h4 { margin-top: 0; }
         .view { display: none; }
@@ -24,33 +37,47 @@
         
         .btn-start-huge { background: var(--success); color: black; font-weight: 900; font-size: 20px; padding: 25px; box-shadow: 0 4px 20px rgba(48, 209, 88, 0.3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 30px; border-radius: 16px; }
         
-        input[type="text"], input[type="number"], select { width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 8px; background: #2c2c2e; color: white; font-size: 16px; box-sizing: border-box; transition: all 0.2s; outline: none; }
+        input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 8px; background: #2c2c2e; color: white; font-size: 16px; box-sizing: border-box; transition: all 0.2s; outline: none; font-family: inherit; }
         input[type="color"] { background: none; border: none; width: 40px; height: 40px; padding: 0; border-radius: 50%; cursor: pointer; margin-right: 10px; }
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
         input[type="color"]::-webkit-color-swatch { border: 2px solid #3a3a3c; border-radius: 50%; }
         
-        input::placeholder { color: #636366; }
-        input:focus, select:focus { outline: 2px solid var(--primary); background: #3a3a3c; }
+        input::placeholder, textarea::placeholder { color: #636366; }
+        input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); background: #3a3a3c; }
         
         .orange-placeholder::placeholder { color: var(--warmup) !important; opacity: 1; font-weight: bold; }
         
-        .set-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; border-left: 3px solid transparent; transition: all 0.3s ease; flex-wrap: wrap; }
-        .set-row.type-normal.completed { border-left-color: var(--success); padding-left: 8px; background-color: rgba(48, 209, 88, 0.05); border-radius: 0 8px 8px 0; }
-        .set-row.type-warmup.completed { border-left-color: var(--warmup); padding-left: 8px; background-color: rgba(255, 159, 10, 0.05); border-radius: 0 8px 8px 0; }
-        .set-row.type-drop { margin-left: 20px; border-left-color: var(--drop); padding-left: 8px; opacity: 0.9; }
-        .set-row.type-drop.completed { background-color: rgba(191, 90, 242, 0.05); border-radius: 0 8px 8px 0; }
+        .set-row { display: flex; flex-direction: column; margin-bottom: 12px; border-left: 3px solid transparent; transition: all 0.3s ease; padding-left: 6px; }
+        .set-row.type-normal.completed { border-left-color: var(--success); background-color: rgba(48, 209, 88, 0.05); border-radius: 0 8px 8px 0; padding-top: 4px; padding-bottom: 4px; }
+        .set-row.type-warmup.completed { border-left-color: var(--warmup); background-color: rgba(255, 159, 10, 0.05); border-radius: 0 8px 8px 0; padding-top: 4px; padding-bottom: 4px; }
+        .set-row.type-drop { margin-left: 20px; border-left-color: var(--drop); opacity: 0.9; }
+        .set-row.type-drop.completed { background-color: rgba(191, 90, 242, 0.05); border-radius: 0 8px 8px 0; padding-top: 4px; padding-bottom: 4px; }
         
+        .set-main { display: flex; gap: 8px; align-items: center; width: 100%; }
         .set-row input { margin-bottom: 0; flex: 1; min-width: 60px; }
         .set-controls { display: flex; gap: 4px; }
         .action-btn { background: #3a3a3c; color: white; border: none; border-radius: 6px; width: 34px; height: 34px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; padding: 0; margin: 0; font-size: 12px; }
         .action-btn.active-w { background: var(--warmup); }
         .action-btn.danger-btn { background: var(--danger); }
         
+        .set-feedback { 
+            font-size: 12px; 
+            margin-top: 6px; 
+            width: 100%; 
+            padding-left: 33px; 
+            font-weight: 600; 
+            color: var(--suggest-color);
+            line-height: 1.3;
+        }
+        
         .badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; margin-left: 8px; letter-spacing: 0.5px; vertical-align: middle; }
         
         .history-text { color: var(--text-sec); font-size: 14px; margin-bottom: 15px; padding-left: 10px; border-left: 3px solid var(--primary); }
         .target-text { color: var(--warning); font-size: 14px; margin-bottom: 10px; padding-left: 10px; border-left: 3px solid var(--warning); background: rgba(255, 214, 10, 0.1); border-radius: 0 8px 8px 0; padding-top: 8px; padding-bottom: 8px; line-height: 1.4; }
         
+        .note-box { width: 100%; min-height: 60px; resize: vertical; margin-top: 10px; margin-bottom: 15px; font-size: 14px; }
+        .past-note-badge { background: #2c2c2e; border-left: 3px solid var(--text-sec); padding: 8px 12px; border-radius: 0 8px 8px 0; font-size: 13px; color: var(--text-sec); margin-bottom: 10px; }
+
         .barbell-math { display: none; background: #2c2c2e; border: 1px solid #3a3a3c; border-radius: 8px; padding: 10px; margin-bottom: 15px; font-size: 14px; }
         .barbell-math span { color: var(--primary); font-weight: bold; }
         
@@ -95,7 +122,6 @@
 
         <button class="btn-start-huge" onclick="apriSelezioneScheda()">▶ INIZIA ALLENAMENTO</button>
 
-        <!-- SEZIONE GESTIONE SCHEDE (CHIUSA DI DEFAULT) -->
         <button class="secondary" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-radius: 12px; margin-bottom: 10px; background: #2c2c2e; border: 1px solid #3a3a3c;" onclick="toggleGestioneSchede()">
             <span style="font-weight: bold; color: white;">⚙️ Gestione Schede</span>
             <span id="toggleSchedeIcon" style="font-size: 14px; color: var(--text-sec);">▼ Apri</span>
@@ -176,6 +202,8 @@
             
             <p class="target-text" id="woTargetData" style="display:none;"></p>
             
+            <div id="pastNoteBox" class="past-note-badge" style="display:none;"></div>
+
             <div id="barbellMathContainer" class="barbell-math">
                 Setup Dischi (Bilanciere 20kg): <br>
                 <span id="barbellMathResult">Inserisci i kg per calcolare...</span>
@@ -184,6 +212,11 @@
             <div id="setsContainer"></div>
             <button class="secondary" onclick="aggiungiSerie('normal')" style="margin-top: 10px;">+ Aggiungi Serie</button>
             
+            <div style="margin-top: 15px;">
+                <label style="font-size: 12px; font-weight: bold; color: var(--text-sec); display: block; margin-bottom: 4px;">📝 Note Esercizio (es. regolazione macchinario, sensazioni):</label>
+                <textarea id="woExerciseNotes" class="note-box" placeholder="Aggiungi una nota..." oninput="salvaStatoWorkout()"></textarea>
+            </div>
+
             <hr style="border-color: #3a3a3c; margin: 20px 0;">
             
             <h3 style="text-align:center;">Recupero</h3>
@@ -272,7 +305,6 @@
         return (((r * 299) + (g * 587) + (b * 114)) / 1000) > 155;
     }
 
-    // NUOVA FUNZIONE: Toggle per il menu della Gestione Schede
     function toggleGestioneSchede() {
         const sez = document.getElementById('sezioneGestioneSchede');
         const icon = document.getElementById('toggleSchedeIcon');
@@ -309,6 +341,7 @@
         let stateToSave = JSON.parse(JSON.stringify(currentWorkout));
         stateToSave.currentScreenSets = currentScreenSets;
         stateToSave.workoutStartTime = workoutStartTime;
+        stateToSave.currentScreenNotes = document.getElementById('woExerciseNotes') ? document.getElementById('woExerciseNotes').value : '';
         localStorage.setItem('wk_active_session', JSON.stringify(stateToSave));
     }
 
@@ -432,7 +465,7 @@
         let logs = [];
         historyData.forEach(sess => {
             let found = sess.data.find(e => normalizzaNome(e.name) === normEx);
-            if(found) logs.push({ date: sess.date, routine: sess.routine, sets: found.sets });
+            if(found) logs.push({ date: sess.date, routine: sess.routine, sets: found.sets, notes: found.notes });
         });
         
         if(logs.length === 0) {
@@ -452,12 +485,14 @@
                     }
                 }).join('<br>');
                 
+                let noteHtml = log.notes ? `<div style="margin-top:6px; font-size:12px; color:var(--text-sec); font-style:italic;">📝 ${log.notes}</div>` : '';
                 let volumeHtml = (gruppo !== "Cardio" && volumeTotale > 0) ? `<div style="margin-top: 6px; font-size: 13px; color: var(--warning);">Volume Load: <b>${volumeTotale} kg</b></div>` : '';
                 
                 bodyHtml += `
                     <div style="background: #2c2c2e; padding: 12px; border-radius: 8px; margin-bottom: 10px;">
                         <div style="font-size: 12px; color: var(--text-sec); margin-bottom: 5px;">${log.date} - ${log.routine}</div>
                         <div style="font-size: 15px; font-weight: bold; line-height: 1.4;">${stringaSerie}</div>
+                        ${noteHtml}
                         ${volumeHtml}
                     </div>
                 `;
@@ -518,7 +553,8 @@
                         return `${prefs}: ${s.reps}x${s.kg}kg`;
                     }
                 }).join(' | ');
-                return `<div style="margin-top: 12px; font-size: 14px;"><b style="color: white;">${ex.name}</b><br><span style="color: var(--text-sec); font-size: 13px;">${setsHtml}</span></div>`;
+                let noteHtml = ex.notes ? `<div style="font-size: 12px; color: var(--text-sec); font-style: italic; margin-top: 2px;">Note: ${ex.notes}</div>` : '';
+                return `<div style="margin-top: 12px; font-size: 14px;"><b style="color: white;">${ex.name}</b><br><span style="color: var(--text-sec); font-size: 13px;">${setsHtml}</span>${noteHtml}</div>`;
             }).join('');
 
             bodyHtml += `
@@ -545,7 +581,6 @@
         localStorage.setItem('wk_history', JSON.stringify(historyData)); renderCalendario(); alert("Cardio registrato!");
     }
 
-    // DASHBOARD CON SCHEDE GRIGIE AMMINISTRATIVE
     function renderDashboard() {
         const container = document.getElementById('routinesContainer'); container.innerHTML = "";
         routines.forEach((r, index) => {
@@ -661,15 +696,88 @@
         currentWorkout.exercises.push(esPosticipato); caricaEsercizioCorrente(); salvaStatoWorkout();
     }
 
+    // --- NUOVE FUNZIONI AGGIORNATE CON IL MENU A TENDINA (SELECT) ---
+
     function sostituisciEsercizioCorrente() {
-        let nuovo = prompt("Nuovo esercizio (modifica solo per oggi):");
-        if(nuovo && nuovo.trim() !== "") { currentWorkout.exercises[currentWorkout.currentExIndex] = normalizzaNome(nuovo); caricaEsercizioCorrente(); salvaStatoWorkout(); }
+        let opzioniEsercizi = ottieniListaEserciziUnici().map(ex => `<option value="${ex}">${ex}</option>`).join('');
+        let html = `
+            <p style="color: var(--text-sec); font-size: 14px; margin-bottom: 10px;">Scegli un esercizio o creane uno nuovo.</p>
+            <select id="selectCambiaEx" style="margin-bottom: 15px; width: 100%; padding: 12px; border-radius: 8px; background: #2c2c2e; color: white; border: none; outline: none; font-size: 16px;">
+                <option value="" disabled selected>Seleziona esercizio...</option>
+                ${opzioniEsercizi}
+                <option value="_NEW_" style="color: var(--primary); font-weight: bold;">+ Crea Nuovo Esercizio...</option>
+            </select>
+            <button onclick="confermaSostituzioneEx()" style="background: var(--success); color: black;">Conferma Modifica</button>
+        `;
+        document.getElementById('modalTitle').innerText = "Cambia Esercizio";
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('dataModal').classList.add('active');
+    }
+
+    function confermaSostituzioneEx() {
+        let sel = document.getElementById('selectCambiaEx');
+        let valore = sel.value;
+        if (!valore) return alert("Seleziona un esercizio dal menu!");
+        
+        let nuovo = valore === "_NEW_" ? prompt("Inserisci il nome del nuovo esercizio:") : valore;
+        
+        if (nuovo && nuovo.trim() !== "") { 
+            let nomeNorm = normalizzaNome(nuovo);
+            currentWorkout.exercises[currentWorkout.currentExIndex] = nomeNorm; 
+            if(!userMuscleMap[nomeNorm]) { 
+                userMuscleMap[nomeNorm] = "Altro / Vari"; 
+                localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); 
+            }
+            caricaEsercizioCorrente(); 
+            salvaStatoWorkout(); 
+            chiudiModale(); 
+        }
     }
 
     function aggiungiEsercizioInCoda() {
-        let nuovo = prompt("Nome esercizio da aggiungere alla fine:");
-        if(nuovo && nuovo.trim() !== "") { currentWorkout.exercises.push(normalizzaNome(nuovo)); document.getElementById('woProgress').innerText = `Esercizio ${currentWorkout.currentExIndex + 1} di ${currentWorkout.exercises.length}`; salvaStatoWorkout(); alert(`Aggiunto!`); }
+        let opzioniEsercizi = ottieniListaEserciziUnici().map(ex => `<option value="${ex}">${ex}</option>`).join('');
+        let html = `
+            <p style="color: var(--text-sec); font-size: 14px; margin-bottom: 10px;">Aggiungi un esercizio in fondo alla scheda di oggi.</p>
+            <select id="selectAggiungiEx" style="margin-bottom: 15px; width: 100%; padding: 12px; border-radius: 8px; background: #2c2c2e; color: white; border: none; outline: none; font-size: 16px;">
+                <option value="" disabled selected>Seleziona esercizio...</option>
+                ${opzioniEsercizi}
+                <option value="_NEW_" style="color: var(--primary); font-weight: bold;">+ Crea Nuovo Esercizio...</option>
+            </select>
+            <button onclick="confermaAggiuntaExCoda()" style="background: var(--success); color: black;">Aggiungi Esercizio</button>
+        `;
+        document.getElementById('modalTitle').innerText = "Aggiungi Extra";
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('dataModal').classList.add('active');
     }
+
+    function confermaAggiuntaExCoda() {
+        let sel = document.getElementById('selectAggiungiEx');
+        let valore = sel.value;
+        if (!valore) return alert("Seleziona un esercizio dal menu!");
+        
+        let nuovo = valore === "_NEW_" ? prompt("Inserisci il nome del nuovo esercizio:") : valore;
+        
+        if (nuovo && nuovo.trim() !== "") { 
+            let nomeNorm = normalizzaNome(nuovo);
+            currentWorkout.exercises.push(nomeNorm); 
+            if(!userMuscleMap[nomeNorm]) { 
+                userMuscleMap[nomeNorm] = "Altro / Vari"; 
+                localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); 
+            }
+            document.getElementById('woProgress').innerText = `Esercizio ${currentWorkout.currentExIndex + 1} di ${currentWorkout.exercises.length}`; 
+            
+            let btnNext = document.getElementById('btnNextExercise');
+            if(currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) {
+                btnNext.innerText = "Termina e Salva 🏁"; btnNext.style.background = "var(--success)";
+            } else {
+                btnNext.innerText = "Esercizio Succ. ➔"; btnNext.style.background = "var(--primary)";
+            }
+            
+            salvaStatoWorkout(); 
+            chiudiModale(); 
+        }
+    }
+    // ------------------------------------------------------------------------
 
     function aggiornaBarbellMath() {
         let exName = currentWorkout.exercises[currentWorkout.currentExIndex].toLowerCase();
@@ -700,9 +808,12 @@
             }
         });
         
+        let currentNotes = document.getElementById('woExerciseNotes') ? document.getElementById('woExerciseNotes').value : '';
+
         currentWorkout.recordedData[currentWorkout.currentExIndex] = { 
             name: currentWorkout.exercises[currentWorkout.currentExIndex], 
-            sets: setsData 
+            sets: setsData,
+            notes: currentNotes
         };
     }
 
@@ -723,13 +834,16 @@
         document.getElementById('woExerciseName').innerHTML = `${exName} <span class="badge" style="${generaStileBadge(gruppoMusc)}">${gruppoMusc}</span>`;
         
         let pastSets = null;
-        let activeSessionSets = currentWorkout.recordedData[currentWorkout.currentExIndex]?.sets;
+        let pastNotes = null;
+        let activeExData = currentWorkout.recordedData[currentWorkout.currentExIndex];
+        let activeSessionSets = activeExData?.sets;
         let targetTextEl = document.getElementById('woTargetData'); targetTextEl.style.display = "none";
         
         for (let i = historyData.length - 1; i >= 0; i--) {
             let foundEx = historyData[i].data.find(e => normalizzaNome(e.name) === normalizzaNome(exName));
             if(foundEx) {
                 pastSets = foundEx.sets;
+                pastNotes = foundEx.notes;
                 
                 let normalSets = pastSets.filter(s => s.type === 'normal' || s.type === undefined);
                 if (normalSets.length > 0) {
@@ -751,14 +865,39 @@
             }
         }
         
+        // Visualizzazione note storiche se presenti
+        let pastNoteBox = document.getElementById('pastNoteBox');
+        if (pastNotes && pastNotes.trim() !== '') {
+            pastNoteBox.innerHTML = `<b>📌 Nota precedente:</b> ${pastNotes}`;
+            pastNoteBox.style.display = "block";
+        } else {
+            pastNoteBox.style.display = "none";
+        }
+
+        // Ripristino/Caricamento note correnti
+        let notesTextarea = document.getElementById('woExerciseNotes');
+        if (activeExData && activeExData.notes !== undefined) {
+            notesTextarea.value = activeExData.notes;
+        } else if (isRestoring && currentWorkout.currentScreenNotes !== undefined) {
+            notesTextarea.value = currentWorkout.currentScreenNotes;
+        } else {
+            notesTextarea.value = "";
+        }
+
         document.getElementById('setsContainer').innerHTML = "";
         
         if (activeSessionSets && activeSessionSets.length > 0) {
-            activeSessionSets.forEach(s => aggiungiSerie(s.type || 'normal', null, s.kg, s.reps));
+            activeSessionSets.forEach((s, idx) => {
+                let matchingPast = pastSets && pastSets[idx] ? pastSets[idx] : (pastSets && pastSets[0] ? pastSets[0] : null);
+                aggiungiSerie(s.type || 'normal', matchingPast, s.kg, s.reps);
+            });
         } else if (isRestoring && currentWorkout.currentScreenSets && currentWorkout.currentScreenSets.length > 0) {
-            currentWorkout.currentScreenSets.forEach(s => aggiungiSerie(s.type || 'normal', null, s.kg, s.reps));
+            currentWorkout.currentScreenSets.forEach((s, idx) => {
+                let matchingPast = pastSets && pastSets[idx] ? pastSets[idx] : null;
+                aggiungiSerie(s.type || 'normal', matchingPast, s.kg, s.reps);
+            });
         } else if (pastSets && pastSets.length > 0) {
-            pastSets.forEach(vecchiaSerie => aggiungiSerie(vecchiaSerie.type || 'normal', vecchiaSerie));
+            pastSets.forEach((vecchiaSerie) => aggiungiSerie(vecchiaSerie.type || 'normal', vecchiaSerie));
         } else {
             aggiungiSerie('normal');
         }
@@ -779,12 +918,43 @@
         salvaStatoWorkout();
     }
 
+    function calcolaRepsEquivalenti1RM(wOld, rOld, wNew) {
+        if (rOld >= 37) return rOld;
+        let oneRM = wOld / (1.0278 - (0.0278 * rOld));
+        let rCalculated = (1.0278 - (wNew / oneRM)) / 0.0278;
+        return Math.max(1, Math.round(rCalculated));
+    }
+
     function controllaCompletamentoRiga(inputElement) {
         let row = inputElement.closest('.set-row');
-        let kg = row.querySelector('.kg-input').value;
-        let reps = row.querySelector('.reps-input').value;
-        if (kg !== "" && reps !== "") row.classList.add('completed');
+        let kgInputVal = row.querySelector('.kg-input').value;
+        let repsInputVal = row.querySelector('.reps-input').value;
+        let feedbackEl = row.querySelector('.set-feedback');
+        
+        if (kgInputVal !== "" && repsInputVal !== "") row.classList.add('completed');
         else row.classList.remove('completed');
+        
+        let kgTyped = parseFloat(kgInputVal);
+        let pastKg = parseFloat(row.dataset.pastKg);
+        let pastReps = parseInt(row.dataset.pastReps);
+
+        if (feedbackEl) {
+            if (!isNaN(kgTyped) && kgTyped > 0 && !isNaN(pastKg) && !isNaN(pastReps) && pastReps > 0) {
+                feedbackEl.style.display = "block";
+                
+                if (kgTyped > pastKg) {
+                    let minReq = calcolaRepsEquivalenti1RM(pastKg, pastReps, kgTyped);
+                    feedbackEl.innerHTML = `⚡ <b>+${(kgTyped - pastKg).toFixed(1).replace('.0','')}kg</b> rispetto a ${pastKg}kg: punta a <b>${minReq} reps</b> per pareggiare il massimale, o <b>${minReq + 1}+ reps</b> per superarlo!`;
+                } else if (kgTyped === pastKg) {
+                    feedbackEl.innerHTML = `🎯 <b>Stesso carico (${pastKg}kg)</b>: per progredire punta ad almeno <b>${pastReps + 1} reps</b> (scorsa volta: ${pastReps}).`;
+                } else {
+                    let minReq = Math.max(pastReps + 1, calcolaRepsEquivalenti1RM(pastKg, pastReps, kgTyped));
+                    feedbackEl.innerHTML = `💡 <b>Carico ridotto (-${(pastKg - kgTyped).toFixed(1).replace('.0','')}kg)</b>: punta ad almeno <b>${minReq} reps</b> per compensare a parità di stimolo.`;
+                }
+            } else {
+                feedbackEl.style.display = "none";
+            }
+        }
         
         aggiornaBarbellMath();
         salvaStatoWorkout();
@@ -805,22 +975,38 @@
         let phKg = pastSet ? pastSet.kg : "Kg"; let phReps = pastSet ? pastSet.reps : "Reps";
         let isWarmup = pastSet && pastSet.type === 'warmup'; let customPhClass = isWarmup ? "orange-placeholder" : "";
 
-        const div = document.createElement('div'); div.className = `set-row type-${tipoAtteso}`; div.dataset.type = tipoAtteso;
+        const div = document.createElement('div'); 
+        div.className = `set-row type-${tipoAtteso}`; 
+        div.dataset.type = tipoAtteso;
+        
+        if (pastSet) {
+            div.dataset.pastKg = pastSet.kg !== undefined ? pastSet.kg : "";
+            div.dataset.pastReps = pastSet.reps !== undefined ? pastSet.reps : "";
+        }
         
         let btnWarmup = tipoAtteso !== 'drop' ? `<button class="action-btn ${tipoAtteso === 'warmup' ? 'active-w' : ''}" onclick="toggleWarmup(this)">W</button>` : '';
         let btnDrop = tipoAtteso !== 'drop' ? `<button class="action-btn" style="background:#bf5af2;" onclick="aggiungiSerie('drop'); salvaStatoWorkout();">↳D</button>` : '';
 
         div.innerHTML = `
-            <span class="set-number" style="width:25px; font-weight:bold; color: var(--text-sec); text-align:center;">${setNumStr}</span>
-            <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${restoreKg}" oninput="controllaCompletamentoRiga(this)">
-            <input type="number" placeholder="${phReps}" class="reps-input ${customPhClass}" value="${restoreReps}" oninput="controllaCompletamentoRiga(this)">
-            <div class="set-controls">
-                ${btnWarmup}${btnDrop}
-                <button class="action-btn danger-btn" onclick="rimuoviSerie(this)">X</button>
+            <div class="set-main">
+                <span class="set-number" style="width:25px; font-weight:bold; color: var(--text-sec); text-align:center;">${setNumStr}</span>
+                <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${restoreKg}" oninput="controllaCompletamentoRiga(this)">
+                <input type="number" placeholder="${phReps}" class="reps-input ${customPhClass}" value="${restoreReps}" oninput="controllaCompletamentoRiga(this)">
+                <div class="set-controls">
+                    ${btnWarmup}${btnDrop}
+                    <button class="action-btn danger-btn" onclick="rimuoviSerie(this)">X</button>
+                </div>
             </div>
+            <div class="set-feedback" style="display:none;"></div>
         `;
         
-        if (restoreKg && restoreReps) div.classList.add('completed');
+        if (restoreKg && restoreReps) {
+            div.classList.add('completed');
+            setTimeout(() => {
+                let kgInput = div.querySelector('.kg-input');
+                if(kgInput.value) controllaCompletamentoRiga(kgInput);
+            }, 50);
+        }
 
         if (tipoAtteso === 'drop' && event && event.target) {
             let rowOrigin = event.target.closest('.set-row');
@@ -874,6 +1060,7 @@
                 .map(ex => {
                     return {
                         name: ex.name,
+                        notes: ex.notes || "",
                         sets: ex.sets.filter(s => s.kg !== "" && s.reps !== "").map(s => ({
                             kg: parseFloat(s.kg), 
                             reps: parseInt(s.reps), 
