@@ -116,7 +116,7 @@
             <h1>Dashboard</h1>
             <div style="display:flex; gap:10px;">
                 <button class="secondary" style="width: auto; padding: 8px 15px;" onclick="switchView('view-history')">Storico</button>
-                <button class="secondary icon-btn" style="width: auto; padding: 8px 15px; font-size: 14px;" onclick="apriArchivio()">🗂️ Archivio</button>
+                <button class="secondary icon-btn" style="width: auto; padding: 8px 15px; font-size: 14px;" onclick="apriArchivio('view-dashboard')">🗂️ Archivio</button>
             </div>
         </div>
 
@@ -147,13 +147,13 @@
     <div id="view-archive" class="view">
         <div class="header-flex" style="margin-bottom: 10px;">
             <h2>Archivio Dati</h2>
-            <button class="secondary" style="width: auto; padding: 8px 15px;" onclick="switchView('view-dashboard')">Chiudi</button>
+            <button class="secondary" style="width: auto; padding: 8px 15px;" onclick="chiudiArchivio()">Chiudi</button>
         </div>
         
         <button id="btnUndo" class="warning" style="display:none; font-size: 14px; padding: 10px;" onclick="undoLastAction()">↩️ Annulla Ultima Azione</button>
         
         <p style="font-size:13px; color:var(--text-sec); margin-bottom: 20px;">
-            • Clicca 📊 per vedere i pesi e il <b>Volume Load</b>.<br>
+            • Clicca 📊 per vedere le statistiche di crescita, i pesi e il <b>Volume Load</b>.<br>
             • Clicca ✏️ per rinominare il testo.<br>
             • Trascina il pallino 🟣 sopra un altro esercizio per unirli.<br>
         </p>
@@ -182,8 +182,12 @@
     <!-- WORKOUT ATTIVO -->
     <div id="view-workout" class="view">
         <div class="header-flex" style="margin-bottom: 15px;">
-            <h2 id="woRoutineName" style="margin: 0; font-size: 20px; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Nome Scheda</h2>
-            <div id="totalWorkoutTimer" class="total-timer">00:00</div>
+            <h2 id="woRoutineName" style="margin: 0; font-size: 20px; max-width: 55%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Nome Scheda</h2>
+            <div style="display:flex; gap: 8px; align-items:center;">
+                <!-- NUOVO PULSANTE ARCHIVIO IN WORKOUT -->
+                <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 14px; margin: 0; border-radius: 8px;" onclick="apriArchivio('view-workout')" title="Consulta Archivio senza perdere i dati in corso">🗂️ Dati</button>
+                <div id="totalWorkoutTimer" class="total-timer">00:00</div>
+            </div>
         </div>
         
         <div class="card">
@@ -294,6 +298,9 @@
     let timerInterval, totalTimerInterval, workoutStartTime;
     let timerEndTime = null; 
     let editIndexRoutine = -1;
+    
+    // Variabile per il tracciamento della provenienza (utile per aprire/chiudere archivio durante il workout)
+    let viewBeforeArchive = 'view-dashboard';
 
     function normalizzaNome(str) { return str.trim().toLowerCase().replace(/\b\w/g, s => s.toUpperCase()); }
     function ottieniGruppoMuscolare(nomeEsercizio) { return userMuscleMap[normalizzaNome(nomeEsercizio)] || "Altro / Vari"; }
@@ -387,10 +394,15 @@
         return Array.from(catalogo).sort();
     }
 
-    function apriArchivio() {
+    function apriArchivio(fromView = 'view-dashboard') {
+        viewBeforeArchive = fromView;
         switchView('view-archive');
         if(undoStack.length > 0) document.getElementById('btnUndo').style.display = "block";
         renderArchivio();
+    }
+
+    function chiudiArchivio() {
+        switchView(viewBeforeArchive);
     }
 
     function renderArchivio() {
@@ -463,6 +475,8 @@
         let gruppo = ottieniGruppoMuscolare(normEx);
         let bodyHtml = "";
         let logs = [];
+        
+        // Estrazione longitudinale dei log
         historyData.forEach(sess => {
             let found = sess.data.find(e => normalizzaNome(e.name) === normEx);
             if(found) logs.push({ date: sess.date, routine: sess.routine, sets: found.sets, notes: found.notes });
@@ -471,6 +485,61 @@
         if(logs.length === 0) {
             bodyHtml = "<p>Nessun dato registrato.</p>";
         } else {
+            // MODULO ANALISI PROGRESSIONE
+            if (gruppo !== "Cardio" && logs.length > 1) {
+                let trendData = logs.map(log => {
+                    let volume = 0;
+                    let best1RM = 0;
+                    log.sets.forEach(s => {
+                        if (s.kg && s.reps && s.type !== 'warmup') {
+                            let k = parseFloat(s.kg);
+                            let r = parseInt(s.reps);
+                            volume += (k * r);
+                            
+                            let effReps = r > 30 ? 30 : r;
+                            let current1RM = k / (1.0278 - (0.0278 * effReps)); 
+                            if (current1RM > best1RM) best1RM = current1RM;
+                        }
+                    });
+                    return { date: log.date, volume: volume, oneRM: best1RM };
+                }).filter(d => d.volume > 0);
+
+                if (trendData.length > 1) {
+                    let primo = trendData[0];
+                    let ultimo = trendData[trendData.length - 1];
+                    
+                    let delta1RM = ultimo.oneRM - primo.oneRM;
+                    let perc1RM = (delta1RM / primo.oneRM) * 100;
+                    let deltaVol = ultimo.volume - primo.volume;
+                    let percVol = primo.volume > 0 ? ((deltaVol / primo.volume) * 100) : 0;
+                    
+                    let colore1RM = delta1RM >= 0 ? "var(--success)" : "var(--danger)";
+                    let segno1RM = delta1RM >= 0 ? "+" : "";
+                    let coloreVol = deltaVol >= 0 ? "var(--success)" : "var(--warning)";
+                    let segnoVol = deltaVol >= 0 ? "+" : "";
+
+                    bodyHtml += `
+                        <div style="background: rgba(10, 132, 255, 0.08); border: 1px solid var(--primary); padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: inset 0 0 10px rgba(10,132,255,0.05);">
+                            <h4 style="margin: 0 0 12px 0; color: var(--primary); font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+                                📈 Trend di Crescita Globale
+                            </h4>
+                            <div style="display: flex; justify-content: space-between; font-size: 13px; line-height: 1.5;">
+                                <div style="flex: 1; border-right: 1px solid #3a3a3c; padding-right: 10px;">
+                                    <span style="color: var(--text-sec); display: block; font-size: 11px; text-transform: uppercase;">1RM Stimato</span>
+                                    <b style="font-size: 14px;">Da ${primo.oneRM.toFixed(1)}kg a ${ultimo.oneRM.toFixed(1)}kg</b><br>
+                                    <span style="color: ${colore1RM}; font-weight: 800; font-size: 14px;">${segno1RM}${perc1RM.toFixed(1)}%</span>
+                                </div>
+                                <div style="flex: 1; text-align: right; padding-left: 10px;">
+                                    <span style="color: var(--text-sec); display: block; font-size: 11px; text-transform: uppercase;">Volume Load</span>
+                                    <b style="font-size: 14px;">Da ${primo.volume}kg a ${ultimo.volume}kg</b><br>
+                                    <span style="color: ${coloreVol}; font-weight: 800; font-size: 14px;">${segnoVol}${percVol.toFixed(1)}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
             logs.reverse().forEach(log => {
                 let volumeTotale = 0;
                 let stringaSerie = log.sets.map((s, i) => {
@@ -696,8 +765,6 @@
         currentWorkout.exercises.push(esPosticipato); caricaEsercizioCorrente(); salvaStatoWorkout();
     }
 
-    // --- NUOVE FUNZIONI AGGIORNATE CON IL MENU A TENDINA (SELECT) ---
-
     function sostituisciEsercizioCorrente() {
         let opzioniEsercizi = ottieniListaEserciziUnici().map(ex => `<option value="${ex}">${ex}</option>`).join('');
         let html = `
@@ -777,12 +844,11 @@
             chiudiModale(); 
         }
     }
-    // ------------------------------------------------------------------------
 
     function aggiornaBarbellMath() {
         let exName = currentWorkout.exercises[currentWorkout.currentExIndex].toLowerCase();
         let container = document.getElementById('barbellMathContainer');
-        if (!exName.includes("hip thrust")) { container.style.display = "none"; return; }
+        if (!exName.includes("hip thrust") && !exName.includes("squat") && !exName.includes("panca piana")) { container.style.display = "none"; return; }
         
         container.style.display = "block";
         let inputs = document.querySelectorAll('.kg-input'); let ultimoValore = 0;
@@ -835,6 +901,8 @@
         
         let pastSets = null;
         let pastNotes = null;
+        let bestAllTimeSet = null; 
+        
         let activeExData = currentWorkout.recordedData[currentWorkout.currentExIndex];
         let activeSessionSets = activeExData?.sets;
         let targetTextEl = document.getElementById('woTargetData'); targetTextEl.style.display = "none";
@@ -842,30 +910,42 @@
         for (let i = historyData.length - 1; i >= 0; i--) {
             let foundEx = historyData[i].data.find(e => normalizzaNome(e.name) === normalizzaNome(exName));
             if(foundEx) {
-                pastSets = foundEx.sets;
-                pastNotes = foundEx.notes;
+                if (!pastSets) {
+                    pastSets = foundEx.sets;
+                    pastNotes = foundEx.notes;
+                }
                 
-                let normalSets = pastSets.filter(s => s.type === 'normal' || s.type === undefined);
+                let normalSets = foundEx.sets.filter(s => s.type === 'normal' || s.type === undefined);
                 if (normalSets.length > 0) {
-                    let bestSet = normalSets.reduce((best, current) => {
+                    let bestSetLoc = normalSets.reduce((best, current) => {
                         if (!best) return current;
                         if (parseFloat(current.kg) > parseFloat(best.kg)) return current;
                         if (parseFloat(current.kg) === parseFloat(best.kg) && parseInt(current.reps) > parseInt(best.reps)) return current;
                         return best;
                     }, null);
 
-                    if (bestSet && bestSet.kg && bestSet.reps) {
-                        let targKg = (parseFloat(bestSet.kg) + 2.5).toFixed(1).replace('.0',''); 
-                        let targReps = parseInt(bestSet.reps) + 1;
-                        targetTextEl.innerHTML = `<span style="font-size: 12px; font-weight: normal; color: var(--text-sec); display: block; margin-bottom: 3px;">🏆 Top Set precedente: ${bestSet.kg}kg x ${bestSet.reps} rep</span>🎯 Target Overload: ${targKg}kg x ${bestSet.reps} rep OPPURE ${bestSet.kg}kg x ${targReps} rep`;
-                        targetTextEl.style.display = "block";
+                    if (bestSetLoc && bestSetLoc.kg && bestSetLoc.reps) {
+                        if (!bestAllTimeSet) {
+                            bestAllTimeSet = bestSetLoc;
+                        } else {
+                            if (parseFloat(bestSetLoc.kg) > parseFloat(bestAllTimeSet.kg)) {
+                                bestAllTimeSet = bestSetLoc;
+                            } else if (parseFloat(bestSetLoc.kg) === parseFloat(bestAllTimeSet.kg) && parseInt(bestSetLoc.reps) > parseInt(bestAllTimeSet.reps)) {
+                                bestAllTimeSet = bestSetLoc;
+                            }
+                        }
                     }
                 }
-                break;
             }
         }
         
-        // Visualizzazione note storiche se presenti
+        if (bestAllTimeSet) {
+            let targKg = (parseFloat(bestAllTimeSet.kg) + 2.5).toFixed(1).replace('.0',''); 
+            let targReps = parseInt(bestAllTimeSet.reps) + 1;
+            targetTextEl.innerHTML = `<span style="font-size: 12px; font-weight: normal; color: var(--text-sec); display: block; margin-bottom: 3px;">🏆 Record Assoluto (PR): ${bestAllTimeSet.kg}kg x ${bestAllTimeSet.reps} rep</span>🎯 Target Overload: ${targKg}kg x ${bestAllTimeSet.reps} rep OPPURE ${bestAllTimeSet.kg}kg x ${targReps} rep`;
+            targetTextEl.style.display = "block";
+        }
+        
         let pastNoteBox = document.getElementById('pastNoteBox');
         if (pastNotes && pastNotes.trim() !== '') {
             pastNoteBox.innerHTML = `<b>📌 Nota precedente:</b> ${pastNotes}`;
@@ -874,7 +954,6 @@
             pastNoteBox.style.display = "none";
         }
 
-        // Ripristino/Caricamento note correnti
         let notesTextarea = document.getElementById('woExerciseNotes');
         if (activeExData && activeExData.notes !== undefined) {
             notesTextarea.value = activeExData.notes;
