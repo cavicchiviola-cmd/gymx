@@ -191,6 +191,7 @@
         <div class="header-flex" style="margin-bottom: 15px;">
             <h2 id="woRoutineName" style="margin: 0; font-size: 20px; max-width: 55%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Nome Scheda</h2>
             <div style="display:flex; gap: 8px; align-items:center;">
+                <!-- NUOVO PULSANTE ARCHIVIO IN WORKOUT -->
                 <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 14px; margin: 0; border-radius: 8px;" onclick="apriArchivio('view-workout')" title="Consulta Archivio senza perdere i dati in corso">🗂️ Dati</button>
                 <div id="totalWorkoutTimer" class="total-timer">00:00</div>
             </div>
@@ -205,7 +206,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <h3 id="woExerciseName" style="margin: 0; display: flex; align-items: center; flex-wrap: wrap;">Nome Esercizio</h3>
                 <div style="display: flex; gap: 5px;">
-                    <!-- PULSANTE AI TRACKER AGGIUNTO -->
+                    <!-- PULSANTE AI TRACKER AGGIUNTO QUI -->
                     <button class="secondary" style="width: auto; padding: 4px 8px; font-size: 12px; margin: 0; background: var(--drop); color: white; border: 1px solid #bf5af2;" onclick="apriMenuSelezioneAi()">🤖 AI Tracker</button>
                     <button class="secondary" style="width: auto; padding: 4px 8px; font-size: 12px; margin: 0;" onclick="sostituisciEsercizioCorrente()" title="Sostituisci esercizio corrente">✏️ Cambia</button>
                     <button class="secondary" style="width: auto; padding: 4px 8px; font-size: 12px; margin: 0;" onclick="aggiungiEsercizioInCoda()" title="Aggiungi esercizio extra">➕ Add Es.</button>
@@ -282,7 +283,7 @@
             <span class="close-modal" onclick="document.getElementById('aiSetupModal').classList.remove('active')">&times;</span>
             <h3 style="color: var(--drop); margin-bottom: 15px;">🤖 Configura AI Tracker</h3>
             <p style="font-size: 14px; color: var(--text-sec); margin-bottom: 15px; line-height: 1.4;">Seleziona il tipo di movimento che stai per eseguire.</p>
-            <select id="aiExerciseTypeSelect" style="margin-bottom: 25px; background: #2c2c2e; padding: 15px; border-radius: 10px;">
+            <select id="aiExerciseTypeSelect" style="width: 100%; margin-bottom: 25px; background: #2c2c2e; padding: 15px; border-radius: 10px; color: white; border: none;">
                 <option value="rdl">🦵 Stacchi / RDL / Squat (Anca e Ginocchio)</option>
                 <option value="pullup">💪 Trazioni / Lat Machine (Gomito in Trazione)</option>
                 <option value="pushup">✋ Panca / Spinte (Gomito in Spinta)</option>
@@ -312,7 +313,7 @@
                     In attesa...
                 </div>
             </div>
-            <button style="border-radius: 0; padding: 15px; background: var(--success); color: black;" onclick="trasferisciReps()">Applica Reps alla Serie</button>
+            <button style="border-radius: 0; padding: 15px; background: var(--success); color: black; width: 100%; border: none; font-size: 16px; font-weight: bold; cursor: pointer;" onclick="trasferisciReps()">Applica Reps alla Serie</button>
         </div>
     </div>
 
@@ -346,6 +347,8 @@
     let timerInterval, totalTimerInterval, workoutStartTime;
     let timerEndTime = null; 
     let editIndexRoutine = -1;
+    
+    // Variabile per il tracciamento della provenienza (utile per aprire/chiudere archivio durante il workout)
     let viewBeforeArchive = 'view-dashboard';
 
     function normalizzaNome(str) { return str.trim().toLowerCase().replace(/\b\w/g, s => s.toUpperCase()); }
@@ -522,6 +525,7 @@
         let bodyHtml = "";
         let logs = [];
         
+        // Estrazione longitudinale dei log
         historyData.forEach(sess => {
             let found = sess.data.find(e => normalizzaNome(e.name) === normEx);
             if(found) logs.push({ date: sess.date, routine: sess.routine, sets: found.sets, notes: found.notes });
@@ -530,13 +534,17 @@
         if(logs.length === 0) {
             bodyHtml = "<p>Nessun dato registrato.</p>";
         } else {
+            // MODULO ANALISI PROGRESSIONE
             if (gruppo !== "Cardio" && logs.length > 1) {
                 let trendData = logs.map(log => {
-                    let volume = 0; let best1RM = 0;
+                    let volume = 0;
+                    let best1RM = 0;
                     log.sets.forEach(s => {
                         if (s.kg && s.reps && s.type !== 'warmup') {
-                            let k = parseFloat(s.kg); let r = parseInt(s.reps);
+                            let k = parseFloat(s.kg);
+                            let r = parseInt(s.reps);
                             volume += (k * r);
+                            
                             let effReps = r > 30 ? 30 : r;
                             let current1RM = k / (1.0278 - (0.0278 * effReps)); 
                             if (current1RM > best1RM) best1RM = current1RM;
@@ -546,11 +554,18 @@
                 }).filter(d => d.volume > 0);
 
                 if (trendData.length > 1) {
-                    let primo = trendData[0]; let ultimo = trendData[trendData.length - 1];
-                    let delta1RM = ultimo.oneRM - primo.oneRM; let perc1RM = (delta1RM / primo.oneRM) * 100;
-                    let deltaVol = ultimo.volume - primo.volume; let percVol = primo.volume > 0 ? ((deltaVol / primo.volume) * 100) : 0;
-                    let colore1RM = delta1RM >= 0 ? "var(--success)" : "var(--danger)"; let segno1RM = delta1RM >= 0 ? "+" : "";
-                    let coloreVol = deltaVol >= 0 ? "var(--success)" : "var(--warning)"; let segnoVol = deltaVol >= 0 ? "+" : "";
+                    let primo = trendData[0];
+                    let ultimo = trendData[trendData.length - 1];
+                    
+                    let delta1RM = ultimo.oneRM - primo.oneRM;
+                    let perc1RM = (delta1RM / primo.oneRM) * 100;
+                    let deltaVol = ultimo.volume - primo.volume;
+                    let percVol = primo.volume > 0 ? ((deltaVol / primo.volume) * 100) : 0;
+                    
+                    let colore1RM = delta1RM >= 0 ? "var(--success)" : "var(--danger)";
+                    let segno1RM = delta1RM >= 0 ? "+" : "";
+                    let coloreVol = deltaVol >= 0 ? "var(--success)" : "var(--warning)";
+                    let segnoVol = deltaVol >= 0 ? "+" : "";
 
                     bodyHtml += `
                         <div style="background: rgba(10, 132, 255, 0.08); border: 1px solid var(--primary); padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: inset 0 0 10px rgba(10,132,255,0.05);">
@@ -703,12 +718,13 @@
     }
 
     function apriSelezioneScheda() {
-        // AGGIUNTO IL BOTTONE AI MIX
+        // AGGIUNTO IL BOTTONE AI MIX SOPRA LE SCHEDE
         let htmlMix = `
             <button style="background: linear-gradient(45deg, #bf5af2, #0a84ff); color: white; padding:20px; margin-bottom:25px; font-size:16px; border-radius:12px; font-weight:bold; box-shadow: 0 4px 15px rgba(0,0,0,0.4);" onclick="generaMixAI(); chiudiModale();">
                 ✨ GENERA MIX A.I. (Ottimizza Settimana)
             </button>
             <hr style="border-color:#3a3a3c; margin-bottom:20px;">
+            <p style="font-size:12px; color:var(--text-sec); margin-bottom:10px;">Oppure scegli una scheda manuale:</p>
         `;
         let htmlRoutines = "";
         if(routines.length > 0) {
@@ -717,7 +733,10 @@
                 let textColor = isLightColor(rColor) ? 'black' : 'white';
                 return `<button style="background:${rColor}; color:${textColor}; padding:20px; margin-bottom:15px; font-size:18px; border-radius:12px; font-weight:bold; box-shadow: 0 4px 10px rgba(0,0,0,0.5);" onclick="avviaWorkout(${i}); chiudiModale();">➔ ${r.name.toUpperCase()}</button>`;
             }).join('');
+        } else {
+            htmlRoutines = "<p style='color:var(--text-sec); font-size:14px;'>Nessuna scheda creata. Usa il bottone '+' nella Dashboard.</p>";
         }
+        
         document.getElementById('modalTitle').innerText = "Quale scheda facciamo oggi?";
         document.getElementById('modalBody').innerHTML = htmlMix + htmlRoutines;
         document.getElementById('dataModal').classList.add('active');
@@ -1171,7 +1190,7 @@
         }, 1000);
     }
 
-    // MODIFICA PER IL POST-WORKOUT COACH
+    // --- LOGICA MODIFICATA PER AI COACH POST-WORKOUT ---
     function prossimoEsercizio() {
         salvaDatiEsercizioUI(); 
         
@@ -1208,9 +1227,9 @@
             localStorage.setItem('wk_history', JSON.stringify(historyData));
             pulisciStatoWorkout();
             
-            // AVVIA IL REPORT AI INVECE DI USCIRE
+            // Lancia l'analisi invece di uscire semplicemente
             generaReportAIPostWorkout(finalData);
-
+            
         } else {
             currentWorkout.currentExIndex++;
             caricaEsercizioCorrente();
@@ -1400,7 +1419,7 @@
     }
 
     // ===============================================
-    // LOGICA AI CAMERA TRACKER
+    // LOGICA AI CAMERA TRACKER (MOVENET)
     // ===============================================
 
     let detector;
@@ -1497,4 +1516,105 @@
                     
                     if (angle < 110) { 
                         repState = "down"; 
-                        aggiornaBadge(stateBadge, "Giù", "var
+                        aggiornaBadge(stateBadge, "Giù", "var(--danger)"); 
+                    }
+                    if (angle > 155 && repState === "down") { 
+                        registraRipetizione(stateBadge, "Su"); 
+                    }
+                } else {
+                    aggiornaBadge(stateBadge, "Inquadra Anca e Ginocchio!", "var(--warning)");
+                }
+            } 
+            else if (currentAiMode === 'pullup') {
+                ptA = keypoints.find(k => k.name === 'left_shoulder');
+                ptB = keypoints.find(k => k.name === 'left_elbow');
+                ptC = keypoints.find(k => k.name === 'left_wrist');
+                
+                if (ptA && ptB && ptC && ptA.score > confidenceThreshold && ptB.score > confidenceThreshold && ptC.score > confidenceThreshold) {
+                    disegnaLinee(ctx, ptA, ptB, ptC);
+                    let angle = calcolaAngolo(ptA, ptB, ptC);
+                    
+                    if (angle > 140) { 
+                        repState = "down"; 
+                        aggiornaBadge(stateBadge, "Braccia Tese", "var(--danger)"); 
+                    }
+                    if (angle < 90 && repState === "down") { 
+                        registraRipetizione(stateBadge, "Trazione Chiusa"); 
+                    }
+                } else {
+                    aggiornaBadge(stateBadge, "Inquadra il braccio!", "var(--warning)");
+                }
+            }
+            else if (currentAiMode === 'pushup') {
+                ptA = keypoints.find(k => k.name === 'left_shoulder');
+                ptB = keypoints.find(k => k.name === 'left_elbow');
+                ptC = keypoints.find(k => k.name === 'left_wrist');
+                
+                if (ptA && ptB && ptC && ptA.score > confidenceThreshold && ptB.score > confidenceThreshold && ptC.score > confidenceThreshold) {
+                    disegnaLinee(ctx, ptA, ptB, ptC);
+                    let angle = calcolaAngolo(ptA, ptB, ptC);
+                    
+                    if (angle < 90) { 
+                        repState = "down"; 
+                        aggiornaBadge(stateBadge, "Bilanciere al petto", "var(--danger)"); 
+                    }
+                    if (angle > 150 && repState === "down") { 
+                        registraRipetizione(stateBadge, "Spinta Chiusa"); 
+                    }
+                } else {
+                    aggiornaBadge(stateBadge, "Inquadra il braccio!", "var(--warning)");
+                }
+            }
+        }
+        
+        aiAnimFrame = requestAnimationFrame(rilevaPosa);
+    }
+
+    function disegnaLinee(ctx, a, b, c) {
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.lineTo(c.x, c.y);
+        ctx.strokeStyle = "var(--success)";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+    }
+    
+    function aggiornaBadge(el, text, color) {
+        if(el.innerText !== text) {
+            el.innerText = text;
+            el.style.background = color;
+        }
+    }
+
+    function registraRipetizione(badgeEl, text) {
+        repState = "up";
+        repCount++;
+        document.getElementById('aiRepCount').innerText = repCount;
+        aggiornaBadge(badgeEl, text, "var(--success)");
+        if (navigator.vibrate) navigator.vibrate(100);
+    }
+
+    function chiudiAiCamera() {
+        isAiRunning = false;
+        cancelAnimationFrame(aiAnimFrame);
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+        }
+        document.getElementById('aiModal').classList.remove('active');
+    }
+
+    function trasferisciReps() {
+        let rows = document.querySelectorAll('#setsContainer .set-row');
+        if (rows.length > 0) {
+            let lastRow = rows[rows.length - 1];
+            lastRow.querySelector('.reps-input').value = repCount;
+            controllaCompletamentoRiga(lastRow.querySelector('.reps-input'));
+        } else {
+            aggiungiSerie('normal', null, "", repCount);
+        }
+        chiudiAiCamera();
+    }
+</script>
+</body>
+</html>
