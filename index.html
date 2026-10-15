@@ -1,3 +1,719 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Workout Tracker PWA</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- TensorFlow.js e Pose Detection (MoveNet) per AI Tracker -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+
+    <style>
+        :root { 
+            --primary: #0a84ff; 
+            --bg: #000000; 
+            --card: #1c1c1e; 
+            --text: #ffffff; 
+            --text-sec: #ebebf599; 
+            --danger: #ff453a; 
+            --success: #30d158; 
+            --warning: #ffd60a; 
+            --warmup: #ff9f0a; 
+            --drop: #bf5af2; 
+            --cardio: #34c759;
+            --suggest-color: #64d2ff;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; padding-top: 50px; }
+        h1, h2, h3, h4 { margin-top: 0; }
+        .view { display: none; }
+        .view.active { display: block; animation: fadeIn 0.2s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .card { background: var(--card); padding: 20px; border-radius: 14px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.8); position: relative; }
+        button { background: var(--primary); color: white; border: none; padding: 14px; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; width: 100%; margin-bottom: 10px; transition: transform 0.1s; }
+        button:active { transform: scale(0.97); filter: brightness(0.9); }
+        button.secondary { background: #3a3a3c; }
+        button.danger { background: var(--danger); }
+        button.warning { background: var(--warning); color: black; }
+        button.icon-btn { width: 36px; height: 36px; padding: 0; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 0; background: #3a3a3c; }
+        
+        .btn-start-huge { background: var(--success); color: black; font-weight: 900; font-size: 20px; padding: 25px; box-shadow: 0 4px 20px rgba(48, 209, 88, 0.3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 30px; border-radius: 16px; }
+        
+        input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 8px; background: #2c2c2e; color: white; font-size: 16px; box-sizing: border-box; transition: all 0.2s; outline: none; font-family: inherit; }
+        input[type="color"] { background: none; border: none; width: 40px; height: 40px; padding: 0; border-radius: 50%; cursor: pointer; margin-right: 10px; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 2px solid #3a3a3c; border-radius: 50%; }
+        
+        input::placeholder, textarea::placeholder { color: #636366; }
+        input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); background: #3a3a3c; }
+        
+        .orange-placeholder::placeholder { color: var(--warmup) !important; opacity: 1; font-weight: bold; }
+        
+        .set-row { display: flex; flex-direction: column; margin-bottom: 12px; border-left: 3px solid transparent; transition: all 0.3s ease; padding-left: 6px; }
+        .set-row.type-normal.completed { border-left-color: var(--success); background-color: rgba(48, 209, 88, 0.05); border-radius: 0 8px 8px 0; padding-top: 4px; padding-bottom: 4px; }
+        .set-row.type-warmup.completed { border-left-color: var(--warmup); background-color: rgba(255, 159, 10, 0.05); border-radius: 0 8px 8px 0; padding-top: 4px; padding-bottom: 4px; }
+        .set-row.type-drop { margin-left: 20px; border-left-color: var(--drop); opacity: 0.9; }
+        .set-row.type-drop.completed { background-color: rgba(191, 90, 242, 0.05); border-radius: 0 8px 8px 0; padding-top: 4px; padding-bottom: 4px; }
+        
+        .set-main { display: flex; gap: 6px; align-items: center; width: 100%; }
+        .set-row input { margin-bottom: 0; flex: 1; min-width: 40px; text-align: center; } 
+        .set-controls { display: flex; gap: 4px; }
+        .action-btn { background: #3a3a3c; color: white; border: none; border-radius: 6px; width: 34px; height: 34px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; padding: 0; margin: 0; font-size: 12px; }
+        .action-btn.active-w { background: var(--warmup); }
+        .action-btn.danger-btn { background: var(--danger); }
+        
+        .set-feedback { font-size: 12px; margin-top: 6px; width: 100%; padding-left: 33px; font-weight: 600; color: var(--suggest-color); line-height: 1.3; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; margin-left: 8px; letter-spacing: 0.5px; vertical-align: middle; }
+        
+        .history-text { color: var(--text-sec); font-size: 14px; margin-bottom: 15px; padding-left: 10px; border-left: 3px solid var(--primary); }
+        .target-text { color: var(--warning); font-size: 14px; margin-bottom: 10px; padding-left: 10px; border-left: 3px solid var(--warning); background: rgba(255, 214, 10, 0.1); border-radius: 0 8px 8px 0; padding-top: 8px; padding-bottom: 8px; line-height: 1.4; }
+        
+        .note-box { width: 100%; min-height: 60px; resize: vertical; margin-top: 10px; margin-bottom: 15px; font-size: 14px; }
+        .past-note-badge { background: #2c2c2e; border-left: 3px solid var(--text-sec); padding: 8px 12px; border-radius: 0 8px 8px 0; font-size: 13px; color: var(--text-sec); margin-bottom: 10px; }
+
+        .barbell-math { display: none; background: #2c2c2e; border: 1px solid #3a3a3c; border-radius: 8px; padding: 10px; margin-bottom: 15px; font-size: 14px; }
+        .barbell-math span { color: var(--primary); font-weight: bold; }
+        
+        #timerDisplay { font-size: 48px; text-align: center; font-variant-numeric: tabular-nums; margin: 20px 0; font-weight: bold; color: var(--primary); }
+        
+        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .progress-text { font-size: 14px; color: var(--primary); font-weight: bold; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        .total-timer { font-family: monospace; font-size: 20px; font-weight: bold; color: var(--primary); background: #1c1c1e; padding: 6px 12px; border-radius: 8px; border: 1px solid #3a3a3c; }
+        
+        .muscle-group-title { margin-top: 25px; margin-bottom: 10px; font-size: 18px; color: var(--primary); border-bottom: 1px solid #3a3a3c; padding-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        .edit-row { display: flex; justify-content: space-between; align-items: center; background: #2c2c2e; padding: 10px; border-radius: 8px; margin-bottom: 8px; transition: opacity 0.3s; }
+
+        .cal-header { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 12px; color: var(--text-sec); font-weight: bold; margin-bottom: 10px; }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+        .cal-day { background: #2c2c2e; border-radius: 6px; min-height: 45px; padding: 4px; display: flex; flex-direction: column; align-items: center; }
+        .cal-day-num { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+        .cal-dots { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; margin-top: auto; padding-bottom: 4px; }
+        .cal-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .cal-empty { background: transparent; }
+        
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;}
+        .modal.active { display: flex; animation: fadeIn 0.2s; }
+        .modal-content { background: var(--card); padding: 20px; border-radius: 14px; width: 100%; max-height: 85vh; overflow-y: auto; }
+        .close-modal { float: right; font-size: 28px; cursor: pointer; color: var(--text-sec); font-weight: bold; line-height: 1; margin-left: 15px;}
+        
+        select.group-select { padding: 6px; border-radius: 6px; background: #1c1c1e; color: white; border: 1px solid #3a3a3c; font-size: 12px; font-weight: bold; width: 110px; }
+        .drag-handle { cursor: grab; font-size: 18px; margin-right: 10px; -webkit-user-drag: element; display: inline-block; }
+        .drag-over { border: 2px dashed var(--warning) !important; background: rgba(255, 214, 10, 0.1) !important; }
+    </style>
+</head>
+<body>
+
+    <!-- DASHBOARD -->
+    <div id="view-dashboard" class="view active">
+        <div class="header-flex">
+            <h1>Dashboard</h1>
+            <div style="display:flex; gap:10px;">
+                <button class="secondary" style="width: auto; padding: 8px 15px;" onclick="switchView('view-history')">Storico</button>
+                <button class="secondary icon-btn" style="width: auto; padding: 8px 15px; font-size: 14px;" onclick="apriArchivio('view-dashboard')">🗂️ Archivio</button>
+            </div>
+        </div>
+
+        <button class="btn-start-huge" onclick="apriSelezioneScheda()">▶ INIZIA ALLENAMENTO</button>
+
+        <div id="undoContainer"></div> <!-- Contenitore per pulsanti di Ripristino -->
+
+        <button class="secondary" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-radius: 12px; margin-bottom: 10px; background: #2c2c2e; border: 1px solid #3a3a3c;" onclick="toggleGestioneSchede()">
+            <span style="font-weight: bold; color: white;">⚙️ Gestione Schede</span>
+            <span id="toggleSchedeIcon" style="font-size: 14px; color: var(--text-sec);">▼ Apri</span>
+        </button>
+        
+        <div id="sezioneGestioneSchede" style="display: none; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 12px; margin-top: 5px;">
+                <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 12px; margin: 0; background: #3a3a3c;" onclick="creaNuovaScheda()">+ Nuova</button>
+            </div>
+            <div id="routinesContainer"></div>
+        </div>
+
+        <hr style="border-color: #3a3a3c; margin: 25px 0 15px 0;">
+        <h3 style="font-size: 16px; color: var(--text-sec);">Backup Dati</h3>
+        <div style="display: flex; gap: 10px;">
+            <button class="secondary" style="font-size: 14px;" onclick="esportaBackup()">💾 Esporta</button>
+            <button class="secondary" style="font-size: 14px;" onclick="document.getElementById('importFile').click()">📂 Importa</button>
+            <input type="file" id="importFile" style="display:none" accept=".json" onchange="importaBackup(event)">
+        </div>
+    </div>
+
+    <!-- ARCHIVIO ESERCIZI -->
+    <div id="view-archive" class="view">
+        <div class="header-flex" style="margin-bottom: 10px;">
+            <h2>Archivio Dati</h2>
+            <button class="secondary" style="width: auto; padding: 8px 15px;" onclick="chiudiArchivio()">Chiudi</button>
+        </div>
+        
+        <button id="btnUndo" class="warning" style="display:none; font-size: 14px; padding: 10px;" onclick="undoLastAction()">↩️ Annulla Ultima Azione</button>
+        
+        <p style="font-size:13px; color:var(--text-sec); margin-bottom: 20px;">
+            • Clicca 📊 per vedere le statistiche di crescita, i pesi e il <b>Volume Load</b>.<br>
+            • Clicca ✏️ per rinominare il testo.<br>
+            • Trascina il pallino 🟣 sopra un altro esercizio per unirli.<br>
+        </p>
+        
+        <div id="archiveContainer"></div>
+    </div>
+
+    <!-- EDITOR SCHEDA CON SELETTORE A TENDINA -->
+    <div id="view-edit-routine" class="view">
+        <div class="header-flex">
+            <h2 id="editRoutineName" style="margin-bottom: 0;">Modifica Scheda</h2>
+            <button class="success" style="width: auto; padding: 8px 15px; margin-bottom: 0; background: var(--success);" onclick="salvaModificheScheda()">Salva</button>
+        </div>
+        
+        <div class="card" style="display: flex; align-items: center; padding: 15px;">
+            <input type="color" id="editRoutineColor" onchange="aggiornaColoreScheda(this.value)">
+            <div>
+                <h4 style="margin:0; font-size: 16px;">Colore Identificativo</h4>
+                <p style="margin:0; font-size: 12px; color: var(--text-sec);">Verrà usato per il pallino nel calendario.</p>
+            </div>
+        </div>
+
+        <div class="card" id="editExercisesContainer"></div>
+    </div>
+
+    <!-- WORKOUT ATTIVO -->
+    <div id="view-workout" class="view">
+        <div class="header-flex" style="margin-bottom: 15px;">
+            <h2 id="woRoutineName" style="margin: 0; font-size: 20px; max-width: 55%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Nome Scheda</h2>
+            <div style="display:flex; gap: 8px; align-items:center;">
+                <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 14px; margin: 0; border-radius: 8px;" onclick="apriArchivio('view-workout')" title="Consulta Archivio senza perdere i dati in corso">🗂️ Dati</button>
+                <div id="totalWorkoutTimer" class="total-timer">00:00</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="header-flex" style="margin-bottom: 5px;">
+                <div id="woProgress" class="progress-text" style="margin:0;">Esercizio 1 di X</div>
+                <div style="display:flex; gap: 5px;">
+                    <!-- Toggle Gamba Singola / Unilaterale -->
+                    <label style="font-size: 11px; background: #2c2c2e; padding: 4px 8px; border-radius: 6px; border: 1px solid #3a3a3c; display:flex; align-items:center; gap:5px; color: var(--text-sec); cursor:pointer;">
+                        <input type="checkbox" id="unilateralToggle" onchange="toggleUnilateral()"> 🦵 Gamba Singola
+                    </label>
+                    <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 12px; margin: 0;" onclick="posticipaEsercizioCorrente()">Posticipa 🔄</button>
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 id="woExerciseName" style="margin: 0; display: flex; align-items: center; flex-wrap: wrap;">Nome Esercizio</h3>
+                <div style="display: flex; gap: 5px;">
+                    <button class="secondary" style="width: auto; padding: 4px 8px; font-size: 12px; margin: 0; background: var(--drop); color: white; border: 1px solid #bf5af2;" onclick="apriMenuSelezioneAi()">🤖 AI Tracker</button>
+                    <button class="secondary" style="width: auto; padding: 4px 8px; font-size: 12px; margin: 0;" onclick="sostituisciEsercizioCorrente()" title="Sostituisci esercizio corrente">✏️ Cambia</button>
+                    <button class="secondary" style="width: auto; padding: 4px 8px; font-size: 12px; margin: 0;" onclick="aggiungiEsercizioInCoda()" title="Aggiungi esercizio extra">➕ Add Es.</button>
+                </div>
+            </div>
+            
+            <p class="target-text" id="woTargetData" style="display:none;"></p>
+            
+            <div id="pastNoteBox" class="past-note-badge" style="display:none;"></div>
+
+            <div id="barbellMathContainer" class="barbell-math">
+                Setup Dischi (Bilanciere 20kg): <br>
+                <span id="barbellMathResult">Inserisci i kg per calcolare...</span>
+            </div>
+            
+            <div id="setsContainer"></div>
+            <button class="secondary" onclick="aggiungiSerie('normal')" style="margin-top: 10px;">+ Aggiungi Serie</button>
+            
+            <div style="margin-top: 15px;">
+                <label style="font-size: 12px; font-weight: bold; color: var(--text-sec); display: block; margin-bottom: 4px;">📝 Note Esercizio (es. regolazione macchinario, sensazioni):</label>
+                <textarea id="woExerciseNotes" class="note-box" placeholder="Aggiungi una nota..." oninput="salvaStatoWorkout()"></textarea>
+            </div>
+
+            <hr style="border-color: #3a3a3c; margin: 20px 0;">
+            
+            <h3 style="text-align:center;">Recupero</h3>
+            <div id="timerDisplay">00:00</div>
+            <div style="display:flex; gap:10px;">
+                <button class="secondary" onclick="avviaTimer(60)">60s</button>
+                <button class="secondary" onclick="avviaTimer(90)">90s</button>
+                <button class="secondary" onclick="avviaTimer(120)">120s</button>
+            </div>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button class="danger" onclick="annullaWorkout()">Annulla</button>
+            <button id="btnPrevExercise" class="secondary" onclick="precedenteEsercizio()" style="display:none; flex: 0.5;">⬅️ Indietro</button>
+            <button id="btnNextExercise" onclick="prossimoEsercizio()" style="flex: 1;">Esercizio Succ. ➔</button>
+        </div>
+    </div>
+
+    <!-- STORICO E CALENDARIO -->
+    <div id="view-history" class="view">
+        <div class="header-flex">
+            <h2>Calendario Storico</h2>
+            <button class="secondary" style="width: auto; padding: 8px 15px;" onclick="switchView('view-dashboard')">Indietro</button>
+        </div>
+
+        <div class="card" style="margin-bottom: 25px; padding-bottom: 15px;">
+            <div class="header-flex" style="margin-bottom: 15px;">
+                <h3 style="font-size: 16px; margin: 0;" id="calMonthTitle">Mese Corrente</h3>
+                <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 12px; margin: 0; background: var(--cardio); color: black; font-weight: bold;" onclick="loggaCardioOggi()">+ Cardio</button>
+            </div>
+            <div class="cal-header">
+                <div>L</div><div>M</div><div>M</div><div>G</div><div>V</div><div>S</div><div>D</div>
+            </div>
+            <div class="cal-grid" id="calendarGrid"></div>
+        </div>
+        
+        <p style="text-align: center; color: var(--text-sec); font-size: 14px;">I dati dettagliati dei pesi sollevati e il Volume Load sono consultabili nella sezione 🗂️ Archivio.</p>
+    </div>
+
+    <!-- MODALE DETTAGLI E SELEZIONE SCHEDA -->
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="chiudiModale()">&times;</span>
+            <h3 id="modalTitle" style="margin-bottom: 15px; color: var(--primary);">Dettagli</h3>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- MODALE SELEZIONE AI TRACKER -->
+    <div id="aiSetupModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="document.getElementById('aiSetupModal').classList.remove('active')">&times;</span>
+            <h3 style="color: var(--drop); margin-bottom: 15px;">🤖 Configura AI Tracker</h3>
+            <p style="font-size: 14px; color: var(--text-sec); margin-bottom: 15px; line-height: 1.4;">Seleziona il tipo di movimento che stai per eseguire.</p>
+            <select id="aiExerciseTypeSelect" style="width: 100%; margin-bottom: 25px; background: #2c2c2e; padding: 15px; border-radius: 10px; color: white; border: none; font-size: 14px;">
+                <option value="rdl">🦵 Stacchi / RDL / Squat (Anca e Ginocchio)</option>
+                <option value="pullup">💪 Trazioni / Lat Machine (Gomito in Trazione)</option>
+                <option value="pushup">✋ Panca / Spinte (Gomito in Spinta)</option>
+            </select>
+            <button style="background: var(--drop); color: white;" onclick="avviaAiCamera()">Accendi Fotocamera ➔</button>
+        </div>
+    </div>
+
+    <!-- MODALE FOTOCAMERA AI -->
+    <div id="aiModal" class="modal" style="flex-direction: column;">
+        <div style="width: 100%; max-width: 400px; background: var(--bg); border-radius: 16px; overflow: hidden; position: relative;">
+            <div class="header-flex" style="padding: 15px; background: var(--card); margin: 0;">
+                <h3 style="margin: 0; color: var(--primary);">AI Rep Counter</h3>
+                <span style="font-size: 24px; cursor: pointer; color: var(--text-sec);" onclick="chiudiAiCamera()">&times;</span>
+            </div>
+            
+            <div style="position: relative; width: 100%; aspect-ratio: 3/4; background: black;">
+                <video id="aiVideo" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;" playsinline autoplay muted></video>
+                <canvas id="aiCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;"></canvas>
+                
+                <div style="position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); border-radius: 12px; padding: 15px; text-align: center; z-index: 20; border: 2px solid var(--primary);">
+                    <span style="font-size: 12px; color: var(--text-sec); display: block; text-transform: uppercase;">Reps</span>
+                    <span id="aiRepCount" style="font-size: 40px; font-weight: 900; color: white;">0</span>
+                </div>
+                
+                <div id="aiStateBadge" style="position: absolute; top: 20px; left: 20px; background: var(--warning); color: black; font-weight: bold; padding: 5px 10px; border-radius: 8px; font-size: 12px; z-index: 20;">
+                    In attesa...
+                </div>
+            </div>
+            <button style="border-radius: 0; padding: 15px; background: var(--success); color: black; width: 100%; border: none; font-size: 16px; font-weight: bold; cursor: pointer;" onclick="trasferisciReps()">Applica Reps alla Serie</button>
+        </div>
+    </div>
+
+<script>
+    window.onerror = function(msg, url, lineNo, columnNo, error) {
+        console.error("Errore PWA: ", msg, "Riga: ", lineNo);
+        return false; 
+    };
+
+    const ST_GROUPS = [
+        { name: "Glutei", hex: "#bf5af2" }, { name: "Quadricipiti", hex: "#0a84ff" },
+        { name: "Femorali", hex: "#ff9f0a" }, { name: "Pettorali", hex: "#ff453a" },
+        { name: "Dorso", hex: "#32ade6" }, { name: "Spalle", hex: "#ffd60a" },
+        { name: "Bicipiti", hex: "#30d158" }, { name: "Tricipiti", hex: "#ff375f" },
+        { name: "Polpacci", hex: "#a2845e" }, { name: "Addome", hex: "#64d2ff" },
+        { name: "Cardio", hex: "#34c759" }
+    ];
+
+    let defaultMuscleMap = {
+        "Hip Thrust": "Glutei", "Bulgarian Split Squat": "Glutei",
+        "Leg Extension": "Quadricipiti", "Leg Curl": "Femorali", "Squat": "Quadricipiti",
+        "Stacchi Rdl": "Femorali", "Pressa": "Quadricipiti", "Panca Piana": "Pettorali",
+        "Trazioni": "Dorso", "Rematore": "Dorso", "Lento Avanti": "Spalle",
+        "Corsa": "Cardio"
+    };
+    
+    let userMuscleMap = defaultMuscleMap;
+    try {
+        let savedMap = localStorage.getItem('wk_muscle_map');
+        if(savedMap) userMuscleMap = JSON.parse(savedMap) || defaultMuscleMap;
+    } catch(e) {}
+
+    let defaultRoutines = [{ id: 1, name: "Lower Body / Glutei", color: "#bf5af2", exercises: ["Hip Thrust", "Bulgarian Split Squat", "Leg Extension", "Leg Curl"] }];
+    let routines = defaultRoutines;
+    try {
+        let savedRoutines = localStorage.getItem('wk_routines');
+        if (savedRoutines) {
+            let parsed = JSON.parse(savedRoutines);
+            if (Array.isArray(parsed)) routines = parsed;
+        }
+        routines.forEach(r => { if(!r.color) r.color = "#0a84ff"; });
+    } catch(e) { routines = defaultRoutines; }
+
+    let historyData = [];
+    try {
+        let savedHistory = localStorage.getItem('wk_history');
+        if (savedHistory) {
+            let parsed = JSON.parse(savedHistory);
+            if (Array.isArray(parsed)) historyData = parsed;
+        }
+    } catch(e) {}
+
+    let undoStack = [];
+    try {
+        let savedUndo = localStorage.getItem('wk_undo_stack');
+        if (savedUndo) {
+            let parsed = JSON.parse(savedUndo);
+            if (Array.isArray(parsed)) undoStack = parsed;
+        }
+    } catch(e) {}
+
+    let currentWorkout = { routineName: "", routineColor: "", exercises: [], currentExIndex: 0, recordedData: [], isDeload: false, unilateralFlags: {} };
+    let timerInterval, totalTimerInterval, workoutStartTime;
+    let timerEndTime = null; 
+    let editIndexRoutine = -1;
+    let viewBeforeArchive = 'view-dashboard';
+
+    function normalizzaNome(str) { return str.trim().toLowerCase().replace(/\b\w/g, s => s.toUpperCase()); }
+    function ottieniGruppoMuscolare(nomeEsercizio) { return userMuscleMap[normalizzaNome(nomeEsercizio)] || "Altro / Vari"; }
+    function ottieniColoreHEX(gruppo) { let found = ST_GROUPS.find(g => g.name === gruppo); return found ? found.hex : "#8e8e93"; }
+    function generaStileBadge(gruppo) { let bg = ottieniColoreHEX(gruppo); return `background: ${bg}22; color: ${bg}; border: 1px solid ${bg}55;`; }
+    function isLightColor(color) {
+        if(!color) return false;
+        const hex = color.replace('#', '');
+        const r = parseInt(hex.substr(0, 2), 16), g = parseInt(hex.substr(2, 2), 16), b = parseInt(hex.substr(4, 2), 16);
+        return (((r * 299) + (g * 587) + (b * 114)) / 1000) > 155;
+    }
+
+    function toggleGestioneSchede() {
+        const sez = document.getElementById('sezioneGestioneSchede');
+        const icon = document.getElementById('toggleSchedeIcon');
+        if (sez.style.display === 'none') {
+            sez.style.display = 'block';
+            icon.innerText = '▲ Chiudi';
+        } else {
+            sez.style.display = 'none';
+            icon.innerText = '▼ Apri';
+        }
+    }
+
+    function switchView(viewId) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById(viewId).classList.add('active');
+        if(viewId === 'view-dashboard') renderDashboard();
+        if(viewId === 'view-history') renderCalendario();
+    }
+
+    function chiudiModale() {
+        document.getElementById('dataModal').classList.remove('active');
+    }
+
+    function salvaStatoWorkout() {
+        if (!currentWorkout.routineName) return;
+        let setRows = document.querySelectorAll('.set-row');
+        let currentScreenSets = [];
+        setRows.forEach(row => {
+            let kgInput = row.querySelector('.kg-input');
+            let repsInputDx = row.querySelector('.reps-input-dx');
+            let repsInputSx = row.querySelector('.reps-input-sx');
+            let repsInputNorm = row.querySelector('.reps-input:not(.reps-input-dx):not(.reps-input-sx)');
+            
+            if (kgInput) {
+                let kgVal = kgInput.value;
+                let repsVal = repsInputDx ? repsInputDx.value : (repsInputNorm ? repsInputNorm.value : "");
+                let repsSxVal = repsInputSx ? repsInputSx.value : undefined;
+                currentScreenSets.push({ kg: kgVal, reps: repsVal, repsSx: repsSxVal, type: row.dataset.type });
+            }
+        });
+        
+        let stateToSave = JSON.parse(JSON.stringify(currentWorkout));
+        stateToSave.currentScreenSets = currentScreenSets;
+        stateToSave.workoutStartTime = workoutStartTime;
+        
+        let notesEl = document.getElementById('woExerciseNotes');
+        stateToSave.currentScreenNotes = notesEl ? notesEl.value : '';
+        
+        localStorage.setItem('wk_active_session', JSON.stringify(stateToSave));
+    }
+
+    function pulisciStatoWorkout() { localStorage.removeItem('wk_active_session'); }
+
+    window.onload = () => {
+        try {
+            let savedSession = localStorage.getItem('wk_active_session');
+            if (savedSession) {
+                if (confirm("Hai un allenamento in sospeso non salvato. Vuoi riprenderlo?")) {
+                    let state = JSON.parse(savedSession);
+                    currentWorkout = state;
+                    if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
+                    workoutStartTime = state.workoutStartTime || Date.now();
+                    clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
+                    switchView('view-workout'); caricaEsercizioCorrente(true);
+                } else { pulisciStatoWorkout(); }
+            }
+            renderDashboard();
+        } catch(e) {
+            console.error("Errore onload:", e);
+            renderDashboard();
+        }
+    };
+
+    function saveStateForUndo() {
+        undoStack.push({ history: JSON.parse(JSON.stringify(historyData)), routines: JSON.parse(JSON.stringify(routines)), map: JSON.parse(JSON.stringify(userMuscleMap)) });
+        if(undoStack.length > 5) undoStack.shift(); 
+        localStorage.setItem('wk_undo_stack', JSON.stringify(undoStack));
+        document.getElementById('btnUndo').style.display = "block";
+    }
+
+    function undoLastAction() {
+        if(undoStack.length === 0) return;
+        let lastState = undoStack.pop();
+        historyData = lastState.history; routines = lastState.routines; userMuscleMap = lastState.map;
+        localStorage.setItem('wk_history', JSON.stringify(historyData)); localStorage.setItem('wk_routines', JSON.stringify(routines));
+        localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); localStorage.setItem('wk_undo_stack', JSON.stringify(undoStack));
+        renderArchivio();
+        if(undoStack.length === 0) document.getElementById('btnUndo').style.display = "none";
+        alert("Azione annullata. Dati ripristinati.");
+    }
+
+    function ottieniListaEserciziUnici() {
+        let catalogo = new Set();
+        historyData.forEach(s => s.data.forEach(ex => catalogo.add(normalizzaNome(ex.name))));
+        routines.forEach(r => r.exercises.forEach(ex => catalogo.add(normalizzaNome(ex))));
+        Object.keys(userMuscleMap).forEach(ex => catalogo.add(normalizzaNome(ex)));
+        return Array.from(catalogo).sort();
+    }
+
+    function apriArchivio(fromView = 'view-dashboard') {
+        viewBeforeArchive = fromView;
+        switchView('view-archive');
+        if(undoStack.length > 0) document.getElementById('btnUndo').style.display = "block";
+        renderArchivio();
+    }
+
+    function chiudiArchivio() {
+        switchView(viewBeforeArchive);
+    }
+
+    function renderArchivio() {
+        let arr = ottieniListaEserciziUnici();
+        let grouped = {}; ST_GROUPS.forEach(g => grouped[g.name] = []); grouped["Altro / Vari"] = [];
+
+        arr.forEach(ex => { let grp = userMuscleMap[ex] || "Altro / Vari"; if(!grouped[grp]) grouped[grp] = []; grouped[grp].push(ex); });
+
+        let html = "";
+        for (let [grpName, exList] of Object.entries(grouped)) {
+            if (exList.length === 0) continue; 
+            let hex = ottieniColoreHEX(grpName);
+            html += `<h3 class="muscle-group-title" style="color: ${hex};">${grpName}</h3>`;
+            
+            exList.forEach(ex => {
+                let isUnassigned = (grpName === "Altro / Vari");
+                let rowStyle = isUnassigned ? "opacity: 0.5;" : "opacity: 1;";
+                let options = ST_GROUPS.map(g => `<option value="${g.name}" ${g.name === grpName ? 'selected' : ''}>${g.name}</option>`).join('');
+                
+                html += `
+                    <div class="edit-row" style="${rowStyle}" draggable="true" ondragstart="dragStart(event, '${ex}')" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropMerge(event, '${ex}')">
+                        <div style="display:flex; align-items:center; flex:1; overflow:hidden;">
+                            <span class="drag-handle" title="Trascina su un altro per unirli">🟣</span>
+                            <span style="font-weight:600; font-size:15px; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${ex}">${ex}</span>
+                        </div>
+                        <div style="display:flex; gap: 5px; align-items:center;">
+                            <button class="icon-btn" style="width:30px; height:30px; font-size:14px;" onclick="apriStoricoEsercizio('${ex}')" title="Vedi Storico">📊</button>
+                            <button class="icon-btn" style="width:30px; height:30px; font-size:14px;" onclick="rinominaEsercizio('${ex}')" title="Rinomina">✏️</button>
+                            <select class="group-select" onchange="impostaGruppo('${ex}', this.value)" title="Cambia Gruppo"><option value="Altro / Vari">Seleziona...</option>${options}</select>
+                            <button class="icon-btn danger" style="width:30px; height:30px; font-size:14px;" onclick="eliminaEsercizioDefinitivo('${ex}')" title="Elimina Ovunque">🗑️</button>
+                        </div>
+                    </div>`;
+            });
+        }
+        document.getElementById('archiveContainer').innerHTML = html;
+    }
+
+    function impostaGruppo(nomeEx, nuovoGruppo) { userMuscleMap[nomeEx] = nuovoGruppo; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); renderArchivio(); }
+    function rinominaEsercizio(oldName) { let nuovo = prompt(`Rinomina "${oldName}":`, oldName); if(nuovo && nuovo.trim() !== "" && normalizzaNome(nuovo) !== normalizzaNome(oldName)) eseguiUnione(oldName, nuovo); }
+    function dragStart(e, exName) { e.dataTransfer.setData("text/plain", exName); e.dataTransfer.effectAllowed = "move"; }
+    function dragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+    function dragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+    function dropMerge(e, targetExName) {
+        e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+        let sourceExName = e.dataTransfer.getData("text/plain");
+        if(sourceExName && sourceExName !== targetExName) { if(confirm(`VUOI UNIRE "${sourceExName}" IN "${targetExName}"?`)) eseguiUnione(sourceExName, targetExName); }
+    }
+    
+    function eseguiUnione(oldN, newN) {
+        saveStateForUndo(); let oldNorm = normalizzaNome(oldN); let newNorm = normalizzaNome(newN); let oldGrp = userMuscleMap[oldNorm];
+        historyData.forEach(s => s.data.forEach(ex => { if(normalizzaNome(ex.name) === oldNorm) ex.name = newNorm; }));
+        routines.forEach(r => r.exercises.forEach((ex, i, arr) => { if(normalizzaNome(ex) === oldNorm) arr[i] = newNorm; }));
+        if(oldGrp && !userMuscleMap[newNorm]) userMuscleMap[newNorm] = oldGrp;
+        delete userMuscleMap[oldNorm];
+        localStorage.setItem('wk_history', JSON.stringify(historyData)); localStorage.setItem('wk_routines', JSON.stringify(routines)); localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); renderArchivio();
+    }
+
+    function eliminaEsercizioDefinitivo(exName) {
+        if(confirm(`ELIMINAZIONE GLOBALE\n\nCancellare "${exName}" da tutte le schede e storico?`)) {
+            saveStateForUndo(); let norm = normalizzaNome(exName);
+            routines.forEach(r => { r.exercises = r.exercises.filter(e => normalizzaNome(e) !== norm); });
+            historyData.forEach(s => { s.data = s.data.filter(e => normalizzaNome(e.name) !== norm); });
+            historyData = historyData.filter(s => s.data.length > 0); delete userMuscleMap[norm];
+            localStorage.setItem('wk_history', JSON.stringify(historyData)); localStorage.setItem('wk_routines', JSON.stringify(routines)); localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); renderArchivio();
+        }
+    }
+
+    function apriStoricoEsercizio(exName) {
+        let normEx = normalizzaNome(exName);
+        let gruppo = ottieniGruppoMuscolare(normEx);
+        let bodyHtml = "";
+        let logs = [];
+        
+        historyData.forEach(sess => {
+            let found = sess.data.find(e => normalizzaNome(e.name) === normEx);
+            if(found) logs.push({ date: sess.date, routine: sess.routine, sets: found.sets, notes: found.notes });
+        });
+        
+        if(logs.length === 0) {
+            bodyHtml = "<p>Nessun dato registrato.</p>";
+        } else {
+            if (gruppo !== "Cardio" && logs.length > 1) {
+                let trendData = logs.map(log => {
+                    let volume = 0;
+                    let best1RM = 0;
+                    log.sets.forEach(s => {
+                        if (s.kg && s.reps && s.type !== 'warmup') {
+                            let k = parseFloat(s.kg);
+                            let rEff = parseInt(s.reps || 0);
+                            let rTot = rEff;
+                            if (s.repsSx !== undefined) {
+                                let rSx = parseInt(s.repsSx || 0);
+                                rTot = rEff + rSx; 
+                                rEff = Math.max(rEff, rSx); 
+                            }
+                            
+                            volume += (k * rTot);
+                            
+                            let repMaxLimit = rEff > 30 ? 30 : rEff;
+                            let current1RM = k / (1.0278 - (0.0278 * repMaxLimit)); 
+                            if (current1RM > best1RM) best1RM = current1RM;
+                        }
+                    });
+                    return { date: log.date, volume: volume, oneRM: best1RM };
+                }).filter(d => d.volume > 0);
+
+                if (trendData.length > 1) {
+                    let primo = trendData[0];
+                    let ultimo = trendData[trendData.length - 1];
+                    
+                    let delta1RM = ultimo.oneRM - primo.oneRM;
+                    let perc1RM = (delta1RM / primo.oneRM) * 100;
+                    let deltaVol = ultimo.volume - primo.volume;
+                    let percVol = primo.volume > 0 ? ((deltaVol / primo.volume) * 100) : 0;
+                    
+                    let colore1RM = delta1RM >= 0 ? "var(--success)" : "var(--danger)";
+                    let segno1RM = delta1RM >= 0 ? "+" : "";
+                    let coloreVol = deltaVol >= 0 ? "var(--success)" : "var(--warning)";
+                    let segnoVol = deltaVol >= 0 ? "+" : "";
+
+                    bodyHtml += `
+                        <div style="background: rgba(10, 132, 255, 0.08); border: 1px solid var(--primary); padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: inset 0 0 10px rgba(10,132,255,0.05);">
+                            <h4 style="margin: 0 0 12px 0; color: var(--primary); font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+                                📈 Trend di Crescita Globale
+                            </h4>
+                            <div style="display: flex; justify-content: space-between; font-size: 13px; line-height: 1.5;">
+                                <div style="flex: 1; border-right: 1px solid #3a3a3c; padding-right: 10px;">
+                                    <span style="color: var(--text-sec); display: block; font-size: 11px; text-transform: uppercase;">1RM Stimato</span>
+                                    <b style="font-size: 14px;">Da ${primo.oneRM.toFixed(1)}kg a ${ultimo.oneRM.toFixed(1)}kg</b><br>
+                                    <span style="color: ${colore1RM}; font-weight: 800; font-size: 14px;">${segno1RM}${perc1RM.toFixed(1)}%</span>
+                                </div>
+                                <div style="flex: 1; text-align: right; padding-left: 10px;">
+                                    <span style="color: var(--text-sec); display: block; font-size: 11px; text-transform: uppercase;">Volume Load</span>
+                                    <b style="font-size: 14px;">Da ${primo.volume}kg a ${ultimo.volume}kg</b><br>
+                                    <span style="color: ${coloreVol}; font-weight: 800; font-size: 14px;">${segnoVol}${percVol.toFixed(1)}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            logs.reverse().forEach(log => {
+                let volumeTotale = 0;
+                let stringaSerie = log.sets.map((s, i) => {
+                    if (gruppo === "Cardio") {
+                        let kmStr = parseFloat(s.kg) > 0 ? ` | ${s.kg} km` : '';
+                        return `${s.reps} min${kmStr}`;
+                    } else {
+                        let prefs = s.type === 'warmup' ? 'W' : (s.type === 'drop' ? '↳D' : `S${i+1}`);
+                        let colorStr = s.type === 'warmup' ? 'color:var(--warmup);' : (s.type === 'drop' ? 'color:var(--drop);' : 'color:var(--text);');
+                        
+                        let strRepOut = s.repsSx !== undefined ? `${s.reps}/${s.repsSx}` : s.reps;
+                        if (s.kg && s.reps) {
+                             let tr = parseInt(s.reps || 0);
+                             if(s.repsSx !== undefined) tr += parseInt(s.repsSx || 0);
+                             volumeTotale += (parseFloat(s.kg) * tr);
+                        }
+                        
+                        return `<span style="${colorStr} margin-right:8px; display:inline-block;">• ${prefs}: ${strRepOut}x${s.kg}kg</span>`;
+                    }
+                }).join('<br>');
+                
+                let noteHtml = log.notes ? `<div style="margin-top:6px; font-size:12px; color:var(--text-sec); font-style:italic;">📝 ${log.notes}</div>` : '';
+                let volumeHtml = (gruppo !== "Cardio" && volumeTotale > 0) ? `<div style="margin-top: 6px; font-size: 13px; color: var(--warning);">Volume Load: <b>${volumeTotale} kg</b></div>` : '';
+                
+                bodyHtml += `
+                    <div style="background: #2c2c2e; padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+                        <div style="font-size: 12px; color: var(--text-sec); margin-bottom: 5px;">${log.date} - ${log.routine}</div>
+                        <div style="font-size: 15px; font-weight: bold; line-height: 1.4;">${stringaSerie}</div>
+                        ${noteHtml}
+                        ${volumeHtml}
+                    </div>
+                `;
+            });
+        }
+        
+        document.getElementById('modalTitle').innerHTML = `${exName} <span class="badge" style="${generaStileBadge(gruppo)}">${gruppo}</span>`;
+        document.getElementById('modalBody').innerHTML = bodyHtml;
+        document.getElementById('dataModal').classList.add('active');
+    }
+
+    function renderCalendario() {
+        const grid = document.getElementById('calendarGrid'); grid.innerHTML = "";
+        const oggi = new Date(); const mese = oggi.getMonth(); const anno = oggi.getFullYear();
+        const nomiMesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+        document.getElementById('calMonthTitle').innerText = `${nomiMesi[mese]} ${anno}`;
+
+        const giorniMese = new Date(anno, mese + 1, 0).getDate();
+        let primoGiorno = new Date(anno, mese, 1).getDay(); primoGiorno = primoGiorno === 0 ? 6 : primoGiorno - 1; 
+
+        let mapGiorniAllenati = {};
+        historyData.forEach(session => {
+            let partiData = session.date.split('/');
+            if(partiData.length === 3) {
+                let d = parseInt(partiData[0]), m = parseInt(partiData[1]) - 1, y = parseInt(partiData[2]);
+                if (m === mese && y === anno) {
+                    if (!mapGiorniAllenati[d]) mapGiorniAllenati[d] = new Set();
+                    mapGiorniAllenati[d].add(session.routineColor || (session.routine === "Sessione Cardio" ? "#34c759" : "#0a84ff"));
+                }
+            }
+        });
+
+        for (let i = 0; i < primoGiorno; i++) grid.innerHTML += `<div class="cal-day cal-empty"></div>`;
+
+        for (let giorno = 1; giorno <= giorniMese; giorno++) {
+            let isOggi = (giorno === oggi.getDate()) ? 'color: var(--primary); font-weight: 800; font-size: 14px;' : '';
+            let palliniHTML = ""; let hasWorkout = mapGiorniAllenati[giorno];
+            if (hasWorkout) { [...mapGiorniAllenati[giorno]].forEach(coloreHex => { palliniHTML += `<span class="cal-dot" style="background-color: ${coloreHex};"></span>`; }); }
+            
+            let dateStr = `${giorno.toString().padStart(2, '0')}/${(mese+1).toString().padStart(2, '0')}/${anno}`;
+            let clickAction = hasWorkout ? `onclick="apriDettagliCalendario('${dateStr}')" style="cursor:pointer;"` : '';
+            grid.innerHTML += `<div class="cal-day" ${clickAction}><span class="cal-day-num" style="${isOggi}">${giorno}</span><div class="cal-dots">${palliniHTML}</div></div>`;
+        }
+    }
+
+    // MODIFICATA: Aggiunto pulsante Elimina Sessione per annullare salvataggi errati dal Calendario
     function apriDettagliCalendario(dataStr) {
         let sessioniDelGiorno = historyData.filter(s => s.date === dataStr);
         let bodyHtml = "";
@@ -5,7 +721,7 @@
         sessioniDelGiorno.forEach((sess) => {
             let rColor = sess.routineColor || (sess.routine === "Sessione Cardio" ? "#34c759" : "#0a84ff");
             
-            // Troviamo l'indice reale di questa specifica sessione nel database globale
+            // Indice reale nel DB globale
             let realIndex = historyData.indexOf(sess);
 
             let exHtml = sess.data.map(ex => {
@@ -24,9 +740,7 @@
 
             bodyHtml += `
                 <div style="background: #2c2c2e; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 5px solid ${rColor}; position: relative;">
-                    <!-- NUOVO PULSANTE ELIMINA SESSIONE -->
                     <button class="danger" style="position: absolute; top: 12px; right: 12px; width: auto; padding: 6px 10px; font-size: 12px; margin: 0;" onclick="eliminaSessioneStorico(${realIndex})">🗑️ Elimina</button>
-                    
                     <h4 style="color: ${rColor}; margin: 0; font-size: 18px; text-transform: uppercase; padding-right: 70px;">${sess.routine}</h4>
                     <p style="font-size: 12px; color: var(--text-sec); margin: 5px 0 10px 0;">Esercizi totali: ${sess.data.length}</p>
                     <div style="border-top: 1px solid #3a3a3c; padding-top: 5px;">${exHtml}</div>
@@ -38,17 +752,1111 @@
         document.getElementById('dataModal').classList.add('active');
     }
 
-    // NUOVA FUNZIONE PER ELIMINARE LA SESSIONE
+    // NUOVA FUNZIONE: Elimina Sessione Intera (se salvata per sbaglio a posteriori)
     function eliminaSessioneStorico(indexDatabase) {
         if(confirm("⚠️ Vuoi davvero eliminare questo intero allenamento dallo storico?\n\nI dati sui volumi e i massimali di quella giornata verranno rimossi. L'azione è irreversibile.")) {
-            // Rimuove 1 elemento all'indice specificato dal database
             historyData.splice(indexDatabase, 1);
-            
-            // Salva il nuovo stato nel LocalStorage
             localStorage.setItem('wk_history', JSON.stringify(historyData));
-            
-            // Chiude la modale e ri-renderizza il calendario (il pallino sparirà)
             chiudiModale();
             renderCalendario();
         }
     }
+
+    function loggaCardioOggi() {
+        let tipo = prompt("Tipo di Attività (es. Corsa, Bici):", "Corsa"); if(!tipo) return;
+        let min = prompt("Minuti di durata:", "30"); if(!min) return;
+        let km = prompt("Chilometri percorsi (0 se non li sai):", "5");
+        let dateStr = new Date().toLocaleDateString('it-IT');
+        let nomeNorm = normalizzaNome(tipo);
+        userMuscleMap[nomeNorm] = "Cardio"; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap));
+        historyData.push({ date: dateStr, routine: "Sessione Cardio", routineColor: "#34c759", data: [{ name: nomeNorm, sets: [{ kg: parseFloat(km||0), reps: parseInt(min||0), type: 'normal' }] }] });
+        localStorage.setItem('wk_history', JSON.stringify(historyData)); renderCalendario(); alert("Cardio registrato!");
+    }
+
+    function renderDashboard() {
+        const container = document.getElementById('routinesContainer'); container.innerHTML = "";
+        routines.forEach((r, index) => {
+            container.innerHTML += `
+                <div style="background: #2c2c2e; border: 1px solid #3a3a3c; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; padding: 15px; margin-bottom: 12px;">
+                    <div style="flex: 1; overflow: hidden; padding-right: 10px;">
+                        <h3 style="margin: 0; font-size: 16px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${r.name}</h3>
+                        <p style="color:var(--text-sec); font-size:12px; margin: 4px 0 0 0;">${r.exercises.length} esercizi</p>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="secondary" style="width: 40px; height: 40px; padding: 0; margin: 0; display: flex; justify-content: center; align-items: center; border-radius: 8px; font-size: 16px;" onclick="apriEditorScheda(${index})" title="Modifica">✏️</button>
+                        <button class="danger" style="width: 40px; height: 40px; padding: 0; margin: 0; display: flex; justify-content: center; align-items: center; border-radius: 8px; font-size: 16px;" onclick="eliminaScheda(${index})" title="Elimina">🗑️</button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        let undoContainer = document.getElementById('undoContainer');
+        undoContainer.innerHTML = "";
+        
+        // Tasto ripristino per allenamento ANNULLATO
+        if (localStorage.getItem('wk_closed_session_backup')) {
+             undoContainer.innerHTML += `<button class="warning" style="margin-bottom: 10px; font-weight:bold; box-shadow: 0 0 15px rgba(255, 214, 10, 0.4);" onclick="ripristinaAllenamentoChiuso()">↩️ Ripristina Allenamento Annullato</button>`;
+        }
+        
+        // Tasto ripristino per allenamento SALVATO di recente
+        if (localStorage.getItem('wk_last_saved_backup')) {
+             undoContainer.innerHTML += `<button class="secondary" style="margin-bottom: 15px; background: #3a3a3c;" onclick="tornaIndietroAlWorkout()">✏️ Riapri ultimo allenamento salvato</button>`;
+        }
+    }
+
+    function ripristinaAllenamentoChiuso() {
+        let backup = localStorage.getItem('wk_closed_session_backup');
+        if (backup) {
+            let state = JSON.parse(backup);
+            currentWorkout = state;
+            workoutStartTime = state.workoutStartTime || Date.now();
+            localStorage.removeItem('wk_closed_session_backup'); 
+            localStorage.removeItem('wk_last_saved_backup'); // Pulisce interferenze
+            localStorage.setItem('wk_active_session', JSON.stringify(currentWorkout)); 
+            clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
+            switchView('view-workout'); caricaEsercizioCorrente(true);
+        }
+    }
+
+    // NUOVA FUNZIONE: Ripristina e riapre il workout subito dopo aver premuto "Salva"
+    function tornaIndietroAlWorkout() {
+        let backup = localStorage.getItem('wk_last_saved_backup');
+        if (backup) {
+            let state = JSON.parse(backup);
+            currentWorkout = state;
+            
+            // Rimuoviamo l'ultimo elemento salvato dallo storico (se non era un deload) per "annullare" il salvataggio
+            if (!currentWorkout.isDeload && historyData.length > 0) {
+                historyData.pop();
+                localStorage.setItem('wk_history', JSON.stringify(historyData));
+            }
+            
+            localStorage.setItem('wk_active_session', JSON.stringify(currentWorkout)); 
+            
+            workoutStartTime = currentWorkout.workoutStartTime || Date.now();
+            clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
+            
+            chiudiModale();
+            switchView('view-workout');
+            caricaEsercizioCorrente(true); 
+        }
+    }
+
+    function apriSelezioneScheda() {
+        let htmlMix = `
+            <label style="display:flex; align-items:center; gap:10px; background: rgba(255, 214, 10, 0.1); border: 1px solid var(--warning); padding: 15px; border-radius: 12px; margin-bottom: 20px; cursor: pointer;">
+                <input type="checkbox" id="deloadToggle" style="width:24px; height:24px;">
+                <span style="font-size:14px; color:var(--text); line-height: 1.3;"><b>Attiva Settimana di Scarico</b><br><span style="color:var(--warning); font-size:12px;">Riduce i target del 10% e taglia 1 serie (sessione non salvata nel DB)</span></span>
+            </label>
+            <button style="background: linear-gradient(45deg, #bf5af2, #0a84ff); color: white; padding:20px; margin-bottom:25px; font-size:16px; border-radius:12px; font-weight:bold; box-shadow: 0 4px 15px rgba(0,0,0,0.4);" onclick="generaMixAI(); chiudiModale();">
+                ✨ GENERA MIX A.I. (Ottimizza Settimana)
+            </button>
+            <hr style="border-color:#3a3a3c; margin-bottom:20px;">
+            <p style="font-size:12px; color:var(--text-sec); margin-bottom:10px;">Oppure scegli una scheda manuale:</p>
+        `;
+        let htmlRoutines = "";
+        if(routines.length > 0) {
+            htmlRoutines = routines.map((r, i) => {
+                let rColor = r.color || '#0a84ff';
+                let textColor = isLightColor(rColor) ? 'black' : 'white';
+                return `<button style="background:${rColor}; color:${textColor}; padding:20px; margin-bottom:15px; font-size:18px; border-radius:12px; font-weight:bold; box-shadow: 0 4px 10px rgba(0,0,0,0.5);" onclick="avviaWorkout(${i}); chiudiModale();">➔ ${r.name.toUpperCase()}</button>`;
+            }).join('');
+        } else {
+            htmlRoutines = "<p style='color:var(--text-sec); font-size:14px;'>Nessuna scheda creata. Usa il bottone '+' nella Dashboard.</p>";
+        }
+        
+        document.getElementById('modalTitle').innerText = "Quale scheda facciamo oggi?";
+        document.getElementById('modalBody').innerHTML = htmlMix + htmlRoutines;
+        document.getElementById('dataModal').classList.add('active');
+    }
+
+    function apriEditorScheda(index) { 
+        editIndexRoutine = index; 
+        document.getElementById('editRoutineName').innerText = routines[index].name; 
+        document.getElementById('editRoutineColor').value = routines[index].color || "#0a84ff";
+        renderEditorEsercizi(); 
+        switchView('view-edit-routine'); 
+    }
+    
+    function aggiornaColoreScheda(colorHex) { routines[editIndexRoutine].color = colorHex; }
+
+    function renderEditorEsercizi() {
+        const container = document.getElementById('editExercisesContainer'); container.innerHTML = "";
+        let exArr = routines[editIndexRoutine].exercises;
+        
+        exArr.forEach((ex, i) => {
+            container.innerHTML += `
+                <div class="edit-row">
+                    <span style="font-weight: 500; font-size: 15px;">${i+1}. ${ex}</span>
+                    <div style="display:flex; gap: 5px;">
+                        <button class="action-btn" onclick="spostaEsercizio(${i}, -1)" ${i === 0 ? 'disabled style="opacity:0.3"' : ''}>↑</button>
+                        <button class="action-btn" onclick="spostaEsercizio(${i}, 1)" ${i === exArr.length - 1 ? 'disabled style="opacity:0.3"' : ''}>↓</button>
+                        <button class="action-btn danger-btn" onclick="rimuoviEsercizioDaScheda(${i})">X</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        let opzioniEsercizi = ottieniListaEserciziUnici().map(ex => `<option value="${ex}">${ex}</option>`).join('');
+
+        container.innerHTML += `
+            <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
+                <select id="newExSelect" style="flex: 1; margin-bottom: 0;">
+                    <option value="" disabled selected>Seleziona esercizio...</option>
+                    ${opzioniEsercizi}
+                    <option value="_NEW_" style="color: var(--primary); font-weight: bold;">+ Crea Nuovo Esercizio...</option>
+                </select>
+                <button class="secondary" style="width: auto; margin-bottom: 0; padding: 12px 15px;" onclick="aggiungiEsercizioSelect()">Aggiungi</button>
+            </div>
+        `;
+    }
+    
+    function aggiungiEsercizioSelect() {
+        let selectEl = document.getElementById('newExSelect'); let nome = selectEl.value;
+        if (nome === "_NEW_") {
+            let nuovoNome = prompt("Inserisci il nome del nuovo esercizio:");
+            if (nuovoNome && nuovoNome.trim() !== "") {
+                let n = normalizzaNome(nuovoNome);
+                routines[editIndexRoutine].exercises.push(n); 
+                if (!userMuscleMap[n]) { userMuscleMap[n] = "Altro / Vari"; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); }
+                renderEditorEsercizi(); 
+            }
+        } else if (nome && nome.trim() !== "") { 
+            routines[editIndexRoutine].exercises.push(nome); renderEditorEsercizi(); 
+        } else { alert("Seleziona un esercizio dal menu."); }
+    }
+    
+    function spostaEsercizio(index, direzione) { let arr = routines[editIndexRoutine].exercises; if (index + direzione < 0 || index + direzione >= arr.length) return; let temp = arr[index]; arr[index] = arr[index + direzione]; arr[index + direzione] = temp; renderEditorEsercizi(); }
+    function rimuoviEsercizioDaScheda(index) { routines[editIndexRoutine].exercises.splice(index, 1); renderEditorEsercizi(); }
+    function salvaModificheScheda() { localStorage.setItem('wk_routines', JSON.stringify(routines)); switchView('view-dashboard'); }
+    function eliminaScheda(index) { if(confirm("Eliminare definitivamente questa scheda?")) { routines.splice(index, 1); localStorage.setItem('wk_routines', JSON.stringify(routines)); renderDashboard(); } }
+    function creaNuovaScheda() { let nome = prompt("Nome della nuova scheda:"); if(nome) { routines.push({ id: Date.now(), name: nome, color: "#0a84ff", exercises: [] }); localStorage.setItem('wk_routines', JSON.stringify(routines)); apriEditorScheda(routines.length - 1); } }
+
+    function avviaWorkout(routineIndex) {
+        let routine = routines[routineIndex];
+        if (routine.exercises.length === 0) return alert("Scheda vuota! Aggiungi esercizi modificandola.");
+        
+        let isDeloadActive = document.getElementById('deloadToggle') ? document.getElementById('deloadToggle').checked : false;
+
+        pulisciStatoWorkout(); 
+        localStorage.removeItem('wk_closed_session_backup');
+        localStorage.removeItem('wk_last_saved_backup'); // Pulizia per non riaprire save vecchi
+        currentWorkout = { routineName: routine.name, routineColor: routine.color || "#0a84ff", exercises: [...routine.exercises], currentExIndex: 0, recordedData: [], isDeload: isDeloadActive, unilateralFlags: {} };
+        workoutStartTime = Date.now();
+        clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
+        switchView('view-workout'); caricaEsercizioCorrente();
+    }
+    
+    function aggiornaTimerTotale() {
+        let elapsedSec = Math.floor((Date.now() - workoutStartTime) / 1000);
+        let h = Math.floor(elapsedSec / 3600), m = Math.floor((elapsedSec % 3600) / 60).toString().padStart(2, '0'), s = (elapsedSec % 60).toString().padStart(2, '0');
+        document.getElementById('totalWorkoutTimer').innerText = h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
+    }
+    
+    function posticipaEsercizioCorrente() {
+        if (currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) return alert("Questo è l'ultimo esercizio rimasto.");
+        let esPosticipato = currentWorkout.exercises.splice(currentWorkout.currentExIndex, 1)[0];
+        currentWorkout.exercises.push(esPosticipato); caricaEsercizioCorrente(); salvaStatoWorkout();
+    }
+
+    function sostituisciEsercizioCorrente() {
+        let opzioniEsercizi = ottieniListaEserciziUnici().map(ex => `<option value="${ex}">${ex}</option>`).join('');
+        let html = `
+            <p style="color: var(--text-sec); font-size: 14px; margin-bottom: 10px;">Scegli un esercizio o creane uno nuovo.</p>
+            <select id="selectCambiaEx" style="margin-bottom: 15px; width: 100%; padding: 12px; border-radius: 8px; background: #2c2c2e; color: white; border: none; outline: none; font-size: 16px;">
+                <option value="" disabled selected>Seleziona esercizio...</option>
+                ${opzioniEsercizi}
+                <option value="_NEW_" style="color: var(--primary); font-weight: bold;">+ Crea Nuovo Esercizio...</option>
+            </select>
+            <button onclick="confermaSostituzioneEx()" style="background: var(--success); color: black;">Conferma Modifica</button>
+        `;
+        document.getElementById('modalTitle').innerText = "Cambia Esercizio";
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('dataModal').classList.add('active');
+    }
+
+    function confermaSostituzioneEx() {
+        let sel = document.getElementById('selectCambiaEx');
+        let valore = sel.value;
+        if (!valore) return alert("Seleziona un esercizio dal menu!");
+        
+        let nuovo = valore === "_NEW_" ? prompt("Inserisci il nome del nuovo esercizio:") : valore;
+        
+        if (nuovo && nuovo.trim() !== "") { 
+            let nomeNorm = normalizzaNome(nuovo);
+            currentWorkout.exercises[currentWorkout.currentExIndex] = nomeNorm; 
+            if(!userMuscleMap[nomeNorm]) { 
+                userMuscleMap[nomeNorm] = "Altro / Vari"; 
+                localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); 
+            }
+            caricaEsercizioCorrente(); 
+            salvaStatoWorkout(); 
+            chiudiModale(); 
+        }
+    }
+
+    function aggiungiEsercizioInCoda() {
+        let opzioniEsercizi = ottieniListaEserciziUnici().map(ex => `<option value="${ex}">${ex}</option>`).join('');
+        let html = `
+            <p style="color: var(--text-sec); font-size: 14px; margin-bottom: 10px;">Aggiungi un esercizio in fondo alla scheda di oggi.</p>
+            <select id="selectAggiungiEx" style="margin-bottom: 15px; width: 100%; padding: 12px; border-radius: 8px; background: #2c2c2e; color: white; border: none; outline: none; font-size: 16px;">
+                <option value="" disabled selected>Seleziona esercizio...</option>
+                ${opzioniEsercizi}
+                <option value="_NEW_" style="color: var(--primary); font-weight: bold;">+ Crea Nuovo Esercizio...</option>
+            </select>
+            <button onclick="confermaAggiuntaExCoda()" style="background: var(--success); color: black;">Aggiungi Esercizio</button>
+        `;
+        document.getElementById('modalTitle').innerText = "Aggiungi Extra";
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('dataModal').classList.add('active');
+    }
+
+    function confermaAggiuntaExCoda() {
+        let sel = document.getElementById('selectAggiungiEx');
+        let valore = sel.value;
+        if (!valore) return alert("Seleziona un esercizio dal menu!");
+        
+        let nuovo = valore === "_NEW_" ? prompt("Inserisci il nome del nuovo esercizio:") : valore;
+        
+        if (nuovo && nuovo.trim() !== "") { 
+            let nomeNorm = normalizzaNome(nuovo);
+            currentWorkout.exercises.push(nomeNorm); 
+            if(!userMuscleMap[nomeNorm]) { 
+                userMuscleMap[nomeNorm] = "Altro / Vari"; 
+                localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); 
+            }
+            document.getElementById('woProgress').innerText = `Esercizio ${currentWorkout.currentExIndex + 1} di ${currentWorkout.exercises.length}`; 
+            
+            let btnNext = document.getElementById('btnNextExercise');
+            if(currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) {
+                btnNext.innerText = "Termina e Salva 🏁"; btnNext.style.background = "var(--success)";
+            } else {
+                btnNext.innerText = "Esercizio Succ. ➔"; btnNext.style.background = "var(--primary)";
+            }
+            
+            salvaStatoWorkout(); 
+            chiudiModale(); 
+        }
+    }
+
+    function aggiornaBarbellMath() {
+        let isUnilat = currentWorkout.unilateralFlags && currentWorkout.unilateralFlags[currentWorkout.currentExIndex];
+        let exName = currentWorkout.exercises[currentWorkout.currentExIndex].toLowerCase();
+        let container = document.getElementById('barbellMathContainer');
+        
+        if (isUnilat || (!exName.includes("hip thrust") && !exName.includes("squat") && !exName.includes("panca piana"))) { 
+            container.style.display = "none"; 
+            return; 
+        }
+        
+        container.style.display = "block";
+        let inputs = document.querySelectorAll('.kg-input'); let ultimoValore = 0;
+        inputs.forEach(inp => { if(inp.value) ultimoValore = parseFloat(inp.value); });
+        
+        let resultSpan = document.getElementById('barbellMathResult');
+        if(ultimoValore <= 20) { resultSpan.innerText = "Solo bilanciere vuoto o peso troppo basso."; return; }
+
+        let perLato = (ultimoValore - 20) / 2; let piastre = [25, 20, 15, 10, 5, 2.5, 1.25]; let caricamento = [];
+        for (let p of piastre) { let count = Math.floor(perLato / p); if (count > 0) { caricamento.push(`${count}x${p}kg`); perLato = (perLato % p).toFixed(2); } }
+        resultSpan.innerText = caricamento.length > 0 ? `Per lato: [ ${caricamento.join(' ] + [ ')} ]` : "Peso non standardizzabile.";
+    }
+
+    function salvaDatiEsercizioUI() {
+        let setRows = document.querySelectorAll('.set-row');
+        let setsData = [];
+        setRows.forEach(row => {
+            let kgInput = row.querySelector('.kg-input');
+            let repsInputDx = row.querySelector('.reps-input-dx');
+            let repsInputSx = row.querySelector('.reps-input-sx');
+            let repsInputNorm = row.querySelector('.reps-input:not(.reps-input-dx):not(.reps-input-sx)');
+            
+            if (kgInput) {
+                let kgVal = kgInput.value;
+                let repsVal = repsInputDx ? repsInputDx.value : (repsInputNorm ? repsInputNorm.value : "");
+                let repsSxVal = repsInputSx ? repsInputSx.value : undefined;
+                setsData.push({ kg: kgVal, reps: repsVal, repsSx: repsSxVal, type: row.dataset.type });
+            }
+        });
+        
+        let currentNotes = document.getElementById('woExerciseNotes') ? document.getElementById('woExerciseNotes').value : '';
+
+        currentWorkout.recordedData[currentWorkout.currentExIndex] = { 
+            name: currentWorkout.exercises[currentWorkout.currentExIndex], 
+            sets: setsData,
+            notes: currentNotes
+        };
+    }
+
+    function precedenteEsercizio() {
+        salvaDatiEsercizioUI(); 
+        if (currentWorkout.currentExIndex > 0) {
+            currentWorkout.currentExIndex--;
+            caricaEsercizioCorrente();
+        }
+    }
+
+    function toggleUnilateral() {
+        if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
+        currentWorkout.unilateralFlags[currentWorkout.currentExIndex] = document.getElementById('unilateralToggle').checked;
+        salvaStatoWorkout();
+        caricaEsercizioCorrente(true); 
+    }
+
+    function caricaEsercizioCorrente(isRestoring = false) {
+        clearInterval(timerInterval); timerEndTime = null; document.getElementById('timerDisplay').innerText = "00:00";
+        let exName = currentWorkout.exercises[currentWorkout.currentExIndex];
+        let gruppoMusc = ottieniGruppoMuscolare(exName);
+        document.getElementById('woRoutineName').innerText = currentWorkout.routineName;
+        document.getElementById('woProgress').innerText = `Esercizio ${currentWorkout.currentExIndex + 1} di ${currentWorkout.exercises.length}`;
+        document.getElementById('woExerciseName').innerHTML = `${exName} <span class="badge" style="${generaStileBadge(gruppoMusc)}">${gruppoMusc}</span>`;
+        
+        let isUnilat = currentWorkout.unilateralFlags && currentWorkout.unilateralFlags[currentWorkout.currentExIndex];
+        document.getElementById('unilateralToggle').checked = !!isUnilat;
+
+        let pastSets = null;
+        let pastNotes = null;
+        let bestAllTimeSet = null; 
+        
+        let activeExData = currentWorkout.recordedData[currentWorkout.currentExIndex];
+        let activeSessionSets = activeExData?.sets;
+        let targetTextEl = document.getElementById('woTargetData'); targetTextEl.style.display = "none";
+        
+        for (let i = historyData.length - 1; i >= 0; i--) {
+            let foundEx = historyData[i].data.find(e => normalizzaNome(e.name) === normalizzaNome(exName));
+            if(foundEx) {
+                if (!pastSets) {
+                    pastSets = JSON.parse(JSON.stringify(foundEx.sets)); 
+                    pastNotes = foundEx.notes;
+                }
+                
+                let normalSets = foundEx.sets.filter(s => s.type === 'normal' || s.type === undefined);
+                if (normalSets.length > 0) {
+                    let bestSetLoc = normalSets.reduce((best, current) => {
+                        if (!best) return current;
+                        if (parseFloat(current.kg) > parseFloat(best.kg)) return current;
+                        
+                        let currentRep = current.repsSx !== undefined ? Math.max(parseInt(current.reps||0), parseInt(current.repsSx||0)) : parseInt(current.reps||0);
+                        let bestRep = best.repsSx !== undefined ? Math.max(parseInt(best.reps||0), parseInt(best.repsSx||0)) : parseInt(best.reps||0);
+                        
+                        if (parseFloat(current.kg) === parseFloat(best.kg) && currentRep > bestRep) return current;
+                        return best;
+                    }, null);
+
+                    if (bestSetLoc && bestSetLoc.kg && bestSetLoc.reps) {
+                        if (!bestAllTimeSet) {
+                            bestAllTimeSet = JSON.parse(JSON.stringify(bestSetLoc));
+                        } else {
+                            if (parseFloat(bestSetLoc.kg) > parseFloat(bestAllTimeSet.kg)) {
+                                bestAllTimeSet = JSON.parse(JSON.stringify(bestSetLoc));
+                            } else {
+                                let locRep = bestSetLoc.repsSx !== undefined ? Math.max(parseInt(bestSetLoc.reps||0), parseInt(bestSetLoc.repsSx||0)) : parseInt(bestSetLoc.reps||0);
+                                let allRep = bestAllTimeSet.repsSx !== undefined ? Math.max(parseInt(bestAllTimeSet.reps||0), parseInt(bestAllTimeSet.repsSx||0)) : parseInt(bestAllTimeSet.reps||0);
+                                
+                                if (parseFloat(bestSetLoc.kg) === parseFloat(bestAllTimeSet.kg) && locRep > allRep) {
+                                    bestAllTimeSet = JSON.parse(JSON.stringify(bestSetLoc));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (bestAllTimeSet) {
+            let baseKg = parseFloat(bestAllTimeSet.kg);
+            let baseReps = bestAllTimeSet.repsSx !== undefined ? Math.max(parseInt(bestAllTimeSet.reps||0), parseInt(bestAllTimeSet.repsSx||0)) : parseInt(bestAllTimeSet.reps||0);
+            
+            if (isUnilat && bestAllTimeSet.repsSx === undefined) baseKg = baseKg * 0.55; 
+            if (!isUnilat && bestAllTimeSet.repsSx !== undefined) baseKg = baseKg / 0.55; 
+            if (currentWorkout.isDeload) baseKg = baseKg * 0.9; 
+            
+            let targKg = baseKg.toFixed(1).replace('.0','');
+
+            if (currentWorkout.isDeload) {
+                targetTextEl.innerHTML = `🧘 <b>SCARICO:</b> Target ${targKg}kg x ${baseReps} rep<br><span style="font-size:12px; font-weight:normal; color:var(--text-sec);">(Carichi del 10% e Volume tagliato)</span>`;
+            } else if (isUnilat) {
+                targetTextEl.innerHTML = `🦵 <b>GAMBA SINGOLA:</b> Target ${targKg}kg x ${baseReps} rep`;
+            } else {
+                let targKgOver = (baseKg + 2.5).toFixed(1).replace('.0',''); 
+                targetTextEl.innerHTML = `<span style="font-size: 12px; font-weight: normal; color: var(--text-sec); display: block; margin-bottom: 3px;">🏆 PR Storico: ${baseKg.toFixed(1).replace('.0','')}kg x ${baseReps} rep</span>🎯 Target Overload: ${targKgOver}kg x ${baseReps} rep OPPURE ${baseKg.toFixed(1).replace('.0','')}kg x ${baseReps + 1} rep`;
+            }
+            targetTextEl.style.display = "block";
+        }
+
+        if (pastSets && pastSets.length > 0) {
+            if (currentWorkout.isDeload && pastSets.length > 1) {
+                pastSets.pop(); 
+            }
+            pastSets = pastSets.map(s => {
+                if(s.type === 'normal' && s.kg) {
+                    let k = parseFloat(s.kg);
+                    if(isUnilat && s.repsSx === undefined) k *= 0.55;
+                    if(!isUnilat && s.repsSx !== undefined) k /= 0.55;
+                    if(currentWorkout.isDeload) k *= 0.9;
+                    return {...s, kg: k.toFixed(1).replace('.0','')};
+                }
+                return s;
+            });
+        }
+        
+        let pastNoteBox = document.getElementById('pastNoteBox');
+        if (pastNotes && pastNotes.trim() !== '') {
+            pastNoteBox.innerHTML = `<b>📌 Nota precedente:</b> ${pastNotes}`;
+            pastNoteBox.style.display = "block";
+        } else {
+            pastNoteBox.style.display = "none";
+        }
+
+        let notesTextarea = document.getElementById('woExerciseNotes');
+        if (activeExData && activeExData.notes !== undefined) {
+            notesTextarea.value = activeExData.notes;
+        } else if (isRestoring && currentWorkout.currentScreenNotes !== undefined) {
+            notesTextarea.value = currentWorkout.currentScreenNotes;
+        } else {
+            notesTextarea.value = "";
+        }
+
+        document.getElementById('setsContainer').innerHTML = "";
+        
+        if (activeSessionSets && activeSessionSets.length > 0 && isRestoring) {
+            activeSessionSets.forEach((s, idx) => {
+                let matchingPast = pastSets && pastSets[idx] ? pastSets[idx] : (pastSets && pastSets[0] ? pastSets[0] : null);
+                aggiungiSerie(s.type || 'normal', matchingPast, s.kg, s.reps, s.repsSx);
+            });
+        } else if (isRestoring && currentWorkout.currentScreenSets && currentWorkout.currentScreenSets.length > 0) {
+            currentWorkout.currentScreenSets.forEach((s, idx) => {
+                let matchingPast = pastSets && pastSets[idx] ? pastSets[idx] : null;
+                aggiungiSerie(s.type || 'normal', matchingPast, s.kg, s.reps, s.repsSx);
+            });
+        } else if (pastSets && pastSets.length > 0) {
+            pastSets.forEach((vecchiaSerie) => aggiungiSerie(vecchiaSerie.type || 'normal', vecchiaSerie));
+        } else {
+            aggiungiSerie('normal');
+        }
+
+        aggiornaBarbellMath(); 
+        
+        let btnPrev = document.getElementById('btnPrevExercise');
+        if (btnPrev) {
+            btnPrev.style.display = currentWorkout.currentExIndex > 0 ? "inline-block" : "none";
+        }
+
+        let btnNext = document.getElementById('btnNextExercise');
+        if(currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) {
+            btnNext.innerText = "Termina e Salva 🏁"; btnNext.style.background = "var(--success)";
+        } else {
+            btnNext.innerText = "Esercizio Succ. ➔"; btnNext.style.background = "var(--primary)";
+        }
+        salvaStatoWorkout();
+    }
+
+    function calcolaRepsEquivalenti1RM(wOld, rOld, wNew) {
+        if (rOld >= 37) return rOld;
+        let oneRM = wOld / (1.0278 - (0.0278 * rOld));
+        let rCalculated = (1.0278 - (wNew / oneRM)) / 0.0278;
+        return Math.max(1, Math.round(rCalculated));
+    }
+
+    function controllaCompletamentoRiga(inputElement) {
+        let row = inputElement.closest('.set-row');
+        let kgInputVal = row.querySelector('.kg-input').value;
+        let isUnilatRow = row.querySelector('.reps-input-dx') !== null;
+        let repsInputVal = isUnilatRow ? row.querySelector('.reps-input-dx').value : row.querySelector('.reps-input').value;
+        let repsSxInputVal = isUnilatRow ? row.querySelector('.reps-input-sx').value : null;
+
+        if (isUnilatRow) {
+            if (kgInputVal !== "" && repsInputVal !== "" && repsSxInputVal !== "") row.classList.add('completed');
+            else row.classList.remove('completed');
+        } else {
+            if (kgInputVal !== "" && repsInputVal !== "") row.classList.add('completed');
+            else row.classList.remove('completed');
+        }
+        
+        let feedbackEl = row.querySelector('.set-feedback');
+        let kgTyped = parseFloat(kgInputVal);
+        let pastKg = parseFloat(row.dataset.pastKg);
+        let pastReps = parseInt(row.dataset.pastReps); 
+
+        if (feedbackEl) {
+            if (!isNaN(kgTyped) && kgTyped > 0 && !isNaN(pastKg) && !isNaN(pastReps) && pastReps > 0) {
+                feedbackEl.style.display = "block";
+                
+                if (kgTyped > pastKg) {
+                    let minReq = calcolaRepsEquivalenti1RM(pastKg, pastReps, kgTyped);
+                    feedbackEl.innerHTML = `⚡ <b>+${(kgTyped - pastKg).toFixed(1).replace('.0','')}kg</b>: fai <b>${minReq} reps</b> per pareggiare il massimale, o <b>${minReq + 1}+ reps</b> per superarlo!`;
+                } else if (kgTyped === pastKg) {
+                    feedbackEl.innerHTML = `🎯 <b>Stesso carico (${pastKg}kg)</b>: punta ad almeno <b>${pastReps + 1} reps</b> (scorsa volta: ${pastReps}).`;
+                } else {
+                    let minReq = Math.max(pastReps + 1, calcolaRepsEquivalenti1RM(pastKg, pastReps, kgTyped));
+                    feedbackEl.innerHTML = `💡 <b>Carico ridotto (-${(pastKg - kgTyped).toFixed(1).replace('.0','')}kg)</b>: punta ad almeno <b>${minReq} reps</b>.`;
+                }
+            } else {
+                feedbackEl.style.display = "none";
+            }
+        }
+        
+        aggiornaBarbellMath();
+        salvaStatoWorkout();
+    }
+
+    function toggleWarmup(btnElement) {
+        let row = btnElement.closest('.set-row');
+        if (row.dataset.type === 'normal') { row.dataset.type = 'warmup'; row.className = row.className.replace('type-normal', 'type-warmup'); btnElement.classList.add('active-w'); } 
+        else if (row.dataset.type === 'warmup') { row.dataset.type = 'normal'; row.className = row.className.replace('type-warmup', 'type-normal'); btnElement.classList.remove('active-w'); }
+        salvaStatoWorkout();
+    }
+
+    function aggiungiSerie(tipoAtteso = 'normal', pastSet = null, restoreKg = "", restoreReps = "", restoreRepsSx = "") {
+        const container = document.getElementById('setsContainer');
+        let mainSetsCount = container.querySelectorAll('.set-row.type-normal, .set-row.type-warmup').length;
+        let setNumStr = tipoAtteso === 'drop' ? '↳' : `${mainSetsCount + 1}°`;
+        
+        let isUnilat = currentWorkout.unilateralFlags && currentWorkout.unilateralFlags[currentWorkout.currentExIndex];
+        
+        let phKg = pastSet && pastSet.kg ? pastSet.kg : "Kg"; 
+        
+        let tempBaseRep = pastSet && pastSet.reps ? pastSet.reps : "Reps";
+        let phRepsDx = pastSet && pastSet.reps ? pastSet.reps : (isUnilat ? "Dx" : "Reps");
+        let phRepsSx = pastSet && pastSet.repsSx !== undefined ? pastSet.repsSx : (isUnilat ? "Sx" : "Reps");
+        
+        let isWarmup = pastSet && pastSet.type === 'warmup'; 
+        let customPhClass = isWarmup ? "orange-placeholder" : "";
+
+        const div = document.createElement('div'); 
+        div.className = `set-row type-${tipoAtteso}`; 
+        div.dataset.type = tipoAtteso;
+        
+        if (pastSet) {
+            div.dataset.pastKg = pastSet.kg !== undefined ? pastSet.kg : "";
+            let rMax = parseInt(pastSet.reps || 0);
+            if (pastSet.repsSx !== undefined) rMax = Math.max(rMax, parseInt(pastSet.repsSx || 0));
+            div.dataset.pastReps = rMax !== 0 ? rMax : "";
+        }
+        
+        let btnWarmup = tipoAtteso !== 'drop' ? `<button class="action-btn ${tipoAtteso === 'warmup' ? 'active-w' : ''}" onclick="toggleWarmup(this)">W</button>` : '';
+        let btnDrop = tipoAtteso !== 'drop' ? `<button class="action-btn" style="background:#bf5af2;" onclick="aggiungiSerie('drop'); salvaStatoWorkout();">↳D</button>` : '';
+
+        if (isUnilat) {
+            div.innerHTML = `
+                <div class="set-main">
+                    <span class="set-number" style="width:25px; font-weight:bold; color: var(--text-sec); text-align:center;">${setNumStr}</span>
+                    <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${restoreKg}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" placeholder="Dx ${phRepsDx !== 'Dx' ? phRepsDx : ''}" class="reps-input reps-input-dx ${customPhClass}" value="${restoreReps}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" placeholder="Sx ${phRepsSx !== 'Sx' ? phRepsSx : ''}" class="reps-input reps-input-sx ${customPhClass}" value="${restoreRepsSx}" oninput="controllaCompletamentoRiga(this)">
+                    <div class="set-controls">
+                        ${btnWarmup}${btnDrop}
+                        <button class="action-btn danger-btn" onclick="rimuoviSerie(this)">X</button>
+                    </div>
+                </div>
+                <div class="set-feedback" style="display:none;"></div>
+            `;
+        } else {
+            div.innerHTML = `
+                <div class="set-main">
+                    <span class="set-number" style="width:25px; font-weight:bold; color: var(--text-sec); text-align:center;">${setNumStr}</span>
+                    <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${restoreKg}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" placeholder="${tempBaseRep}" class="reps-input ${customPhClass}" value="${restoreReps}" oninput="controllaCompletamentoRiga(this)">
+                    <div class="set-controls">
+                        ${btnWarmup}${btnDrop}
+                        <button class="action-btn danger-btn" onclick="rimuoviSerie(this)">X</button>
+                    </div>
+                </div>
+                <div class="set-feedback" style="display:none;"></div>
+            `;
+        }
+        
+        if (restoreKg && restoreReps && (!isUnilat || (isUnilat && restoreRepsSx))) {
+            div.classList.add('completed');
+            setTimeout(() => {
+                let kgInput = div.querySelector('.kg-input');
+                if(kgInput && kgInput.value) controllaCompletamentoRiga(kgInput);
+            }, 50);
+        }
+
+        if (tipoAtteso === 'drop' && window.event && window.event.target) {
+            let rowOrigin = window.event.target.closest('.set-row');
+            if(rowOrigin && rowOrigin.nextSibling) container.insertBefore(div, rowOrigin.nextSibling);
+            else container.appendChild(div);
+        } else { container.appendChild(div); }
+        
+        aggiornaNumerazioneSerie();
+    }
+
+    function aggiornaNumerazioneSerie() {
+        let count = 1;
+        document.querySelectorAll('.set-row').forEach(row => { if (row.dataset.type !== 'drop') { row.querySelector('.set-number').innerText = count + "°"; count++; } });
+    }
+
+    function rimuoviSerie(btnElement) { btnElement.closest('.set-row').remove(); aggiornaNumerazioneSerie(); aggiornaBarbellMath(); salvaStatoWorkout(); }
+
+    function playAudioAlert() {
+        try {
+            let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            let oscillator = audioCtx.createOscillator(); oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); oscillator.connect(audioCtx.destination);
+            oscillator.start(); oscillator.stop(audioCtx.currentTime + 0.5); 
+        } catch(e) { console.log("Audio non supportato."); }
+    }
+
+    function avviaTimer(secondi) {
+        clearInterval(timerInterval);
+        timerEndTime = Date.now() + (secondi * 1000);
+        let formatTime = (sec) => `${Math.floor(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}`;
+        document.getElementById('timerDisplay').innerText = formatTime(secondi);
+        
+        timerInterval = setInterval(() => {
+            let remain = Math.ceil((timerEndTime - Date.now()) / 1000);
+            if(remain <= 0) {
+                clearInterval(timerInterval); document.getElementById('timerDisplay').innerText = "00:00"; timerEndTime = null;
+                if(navigator.vibrate) navigator.vibrate([300, 150, 300]);
+                playAudioAlert();
+            } else { document.getElementById('timerDisplay').innerText = formatTime(remain); }
+        }, 1000);
+    }
+
+    function prossimoEsercizio() {
+        salvaDatiEsercizioUI(); 
+        
+        if(currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) {
+            
+            // Backup di stato globale per poter tornare indietro dopo aver salvato
+            localStorage.setItem('wk_last_saved_backup', JSON.stringify(currentWorkout));
+            
+            clearInterval(totalTimerInterval); timerEndTime = null;
+            let dateStr = new Date().toLocaleDateString('it-IT');
+            
+            let finalData = currentWorkout.recordedData.filter(ex => ex && ex.sets && ex.sets.length > 0)
+                .map(ex => {
+                    return {
+                        name: ex.name,
+                        notes: ex.notes || "",
+                        sets: ex.sets.filter(s => s.kg !== "" && (s.reps !== "" || s.repsSx !== undefined)).map(s => ({
+                            kg: parseFloat(s.kg), 
+                            reps: parseInt(s.reps || 0), 
+                            repsSx: s.repsSx !== undefined ? parseInt(s.repsSx || 0) : undefined,
+                            type: s.type
+                        }))
+                    };
+                }).filter(ex => ex.sets.length > 0);
+
+            if(finalData.length === 0) {
+                alert("Nessun dato valido inserito. L'allenamento non è stato salvato.");
+                pulisciStatoWorkout(); switchView('view-dashboard');
+                return;
+            }
+
+            if (!currentWorkout.isDeload) {
+                historyData.push({ 
+                    date: dateStr, 
+                    routine: currentWorkout.routineName, 
+                    routineColor: currentWorkout.routineColor, 
+                    data: finalData 
+                });
+                localStorage.setItem('wk_history', JSON.stringify(historyData));
+            } else {
+                alert("🧘 Allenamento di Scarico terminato!\n\nI dati sono stati elaborati dall'AI Coach, ma non sono stati salvati nel Database Storico per non intaccare le tue metriche e grafici di prestazione massimale.");
+            }
+            
+            pulisciStatoWorkout();
+            localStorage.removeItem('wk_closed_session_backup'); 
+            
+            generaReportAIPostWorkout(finalData);
+
+        } else {
+            currentWorkout.currentExIndex++;
+            caricaEsercizioCorrente();
+        }
+    }
+
+    function annullaWorkout() {
+        if(confirm("Vuoi annullare e chiudere questo allenamento? Potrai ripristinarlo in un secondo momento.")) {
+            localStorage.setItem('wk_closed_session_backup', localStorage.getItem('wk_active_session'));
+            localStorage.removeItem('wk_last_saved_backup'); // Evita conflitti
+            clearInterval(totalTimerInterval); timerEndTime = null; pulisciStatoWorkout(); switchView('view-dashboard');
+        }
+    }
+
+    function esportaBackup() {
+        const dataStr = JSON.stringify({ routines: routines, history: historyData, map: userMuscleMap }, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = `backup_allenamento_${new Date().toLocaleDateString('it-IT').replace(/\//g, '-')}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    function importaBackup(event) {
+        const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const importato = JSON.parse(e.target.result);
+                if (importato.routines && importato.history) {
+                    routines = importato.routines; historyData = importato.history;
+                    if (importato.map) { userMuscleMap = importato.map; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); }
+                    localStorage.setItem('wk_routines', JSON.stringify(routines)); localStorage.setItem('wk_history', JSON.stringify(historyData));
+                    renderDashboard(); alert("Dati importati!");
+                }
+            } catch (error) { alert("Errore lettura file."); } event.target.value = "";
+        }; reader.readAsText(file);
+    }
+
+    // ===============================================
+    // LOGICA AI MIX E AI COACH
+    // ===============================================
+
+    function generaMixAI() {
+        let isDeloadActive = document.getElementById('deloadToggle') ? document.getElementById('deloadToggle').checked : false;
+
+        let oggi = new Date();
+        let giornoSettimana = oggi.getDay(); 
+        let diffGiorni = oggi.getDate() - giornoSettimana + (giornoSettimana === 0 ? -6 : 1);
+        let lunediCorrente = new Date(oggi.setDate(diffGiorni));
+        lunediCorrente.setHours(0, 0, 0, 0); 
+        
+        let volumiSettimanali = { "Glutei": 0, "Femorali": 0, "Quadricipiti": 0, "Dorso": 0, "Pettorali": 0, "Spalle": 0, "Bicipiti": 0, "Tricipiti": 0, "Addome": 0 };
+        
+        historyData.forEach(session => {
+            let partiData = session.date.split('/'); 
+            if(partiData.length === 3) {
+                let dataSessione = new Date(`${partiData[2]}-${partiData[1]}-${partiData[0]}`);
+                dataSessione.setHours(0, 0, 0, 0);
+                
+                if (dataSessione >= lunediCorrente) {
+                    session.data.forEach(ex => {
+                        let gruppo = ottieniGruppoMuscolare(ex.name);
+                        if (volumiSettimanali[gruppo] !== undefined) {
+                            let serieValide = ex.sets.filter(s => s.type !== 'warmup' && s.kg !== "").length;
+                            volumiSettimanali[gruppo] += serieValide;
+                        }
+                    });
+                }
+            }
+        });
+
+        let gruppiCarenti = Object.keys(volumiSettimanali)
+            .filter(g => volumiSettimanali[g] < 8)
+            .sort((a, b) => volumiSettimanali[a] - volumiSettimanali[b]);
+        
+        if (gruppiCarenti.length === 0) return alert("Hai volumi perfetti su tutto questa settimana! Scegli una scheda normale o riposa.");
+
+        let eserciziScelti = [];
+        let tuttiEsercizi = ottieniListaEserciziUnici();
+        
+        gruppiCarenti.slice(0, 3).forEach(gruppo => {
+            let opzioni = tuttiEsercizi.filter(ex => ottieniGruppoMuscolare(ex) === gruppo);
+            if (opzioni.length > 0) {
+                eserciziScelti.push(opzioni[0]); 
+                if(opzioni.length > 1 && eserciziScelti.length < 5) eserciziScelti.push(opzioni[1]); 
+            }
+        });
+
+        if (eserciziScelti.length === 0) return alert("Non ho abbastanza esercizi in archivio per generare un mix.");
+
+        let priorita = ["squat", "stacch", "rdl", "thrust", "pressa", "panca", "trazion", "lat", "extension", "curl", "abduct"];
+        eserciziScelti.sort((a, b) => {
+            let indexA = priorita.findIndex(p => a.toLowerCase().includes(p));
+            let indexB = priorita.findIndex(p => b.toLowerCase().includes(p));
+            if (indexA === -1) indexA = 99;
+            if (indexB === -1) indexB = 99;
+            return indexA - indexB;
+        });
+
+        pulisciStatoWorkout(); 
+        localStorage.removeItem('wk_closed_session_backup');
+        localStorage.removeItem('wk_last_saved_backup');
+        
+        currentWorkout = { 
+            routineName: "✨ Mix Ottimizzato A.I.", 
+            routineColor: "#bf5af2", 
+            exercises: eserciziScelti, 
+            currentExIndex: 0, 
+            recordedData: [], 
+            workoutStartTime: Date.now(),
+            isDeload: isDeloadActive,
+            unilateralFlags: {}
+        };
+        workoutStartTime = Date.now();
+        clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000);
+        switchView('view-workout'); caricaEsercizioCorrente();
+    }
+
+    function generaReportAIPostWorkout(workoutData) {
+        let tonnellaggioTotale = 0;
+        let serieTotali = 0;
+        let repsTotalNumber = 0;
+        let feedbackOrdine = "";
+        let commentoAllenamento = "";
+        let muscoliLavorati = new Set();
+        
+        workoutData.forEach((ex, index) => {
+            let gruppo = ottieniGruppoMuscolare(ex.name);
+            muscoliLavorati.add(gruppo);
+            
+            ex.sets.forEach(s => {
+                if (s.type !== 'warmup' && s.kg && s.reps) {
+                    let tr = parseInt(s.reps || 0);
+                    if(s.repsSx !== undefined) tr += parseInt(s.repsSx || 0);
+                    tonnellaggioTotale += (parseFloat(s.kg) * tr);
+                    repsTotalNumber += tr;
+                    serieTotali++;
+                }
+            });
+
+            if (index > 0) {
+                let exPrecedente = workoutData[index - 1].name.toLowerCase();
+                let exAttuale = ex.name.toLowerCase();
+                if ((exPrecedente.includes("extension") || exPrecedente.includes("curl") || exPrecedente.includes("abduction") || exPrecedente.includes("kick")) && 
+                    (exAttuale.includes("squat") || exAttuale.includes("thrust") || exAttuale.includes("stacch") || exAttuale.includes("rdl"))) {
+                    feedbackOrdine = `⚠️ <b>Attenzione all'ordine:</b> Hai fatto "${ex.name}" dopo un esercizio di isolamento. Per spingere carichi massimali, metti prima gli esercizi pesanti.`;
+                }
+            }
+        });
+
+        if (serieTotali < 6) {
+            commentoAllenamento = "Seduta breve e concentrata. Perfetta se avevi poco tempo o se stai facendo scarico attivo.";
+        } else if (serieTotali >= 6 && serieTotali <= 16) {
+            commentoAllenamento = "Volume eccellente! Hai dato uno stimolo ipertrofico ideale senza accumulare volume inutile.";
+        } else {
+            commentoAllenamento = "Sessione ad altissimo volume! Assicurati di dormire e mangiare abbastanza per recuperare questo sforzo.";
+        }
+
+        if (muscoliLavorati.has("Glutei") && tonnellaggioTotale > 3000) {
+            commentoAllenamento += " 🔥 Ottimo lavoro sui carichi per i glutei, il tonnellaggio è notevole.";
+        }
+
+        let repsMedie = serieTotali > 0 ? (repsTotalNumber / serieTotali) : 0;
+        let intensita = repsMedie > 16 ? "Metabolica (Resistenza/Pump)" : (repsMedie < 8 ? "Neurologica (Forza Max)" : "Ipertrofica (Massa/Volume)");
+
+        let htmlReport = `
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h2 style="margin:0; color: var(--success);">Ottimo Lavoro! 🎉</h2>
+                <p style="color: var(--text-sec); font-size: 14px;">Tempo effettivo: ${document.getElementById('totalWorkoutTimer').innerText}</p>
+            </div>
+            
+            <div style="background: #2c2c2e; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #3a3a3c;">
+                <h4 style="margin: 0 0 10px 0; color: var(--primary);">📊 Statistiche Sessione</h4>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #3a3a3c; padding-bottom: 8px; margin-bottom: 8px;">
+                    <span>Volume Load:</span> <b style="color: var(--warning);">${tonnellaggioTotale.toFixed(1)} kg</b>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #3a3a3c; padding-bottom: 8px; margin-bottom: 8px;">
+                    <span>Serie Allenanti:</span> <b>${serieTotali}</b>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Focus Fisiologico:</span> <b style="color: var(--drop);">${intensita}</b>
+                </div>
+            </div>
+
+            <div style="background: rgba(10, 132, 255, 0.1); border-left: 4px solid var(--primary); padding: 15px; border-radius: 0 12px 12px 0; margin-bottom: 15px;">
+                <h4 style="margin: 0 0 8px 0; color: var(--primary);">🧠 AI Coach Feedback</h4>
+                <p style="margin: 0 0 10px 0; font-size: 13px; line-height: 1.4;">
+                    Muscoli colpiti: <b>${Array.from(muscoliLavorati).join(', ')}</b>.<br><br>
+                    ${feedbackOrdine ? feedbackOrdine : "✅ Ordine biomeccanico corretto."}
+                </p>
+                <p style="margin: 0; font-size: 14px; font-weight: 500; color: #fff; line-height: 1.4;">
+                    💬 "${commentoAllenamento}"
+                </p>
+            </div>
+            
+            <!-- NUOVI PULSANTI CON UNDO SALVATAGGIO -->
+            <button class="warning" style="margin-bottom: 10px; color: black;" onclick="tornaIndietroAlWorkout()">↩️ Torna all'Allenamento</button>
+            <button class="success" onclick="chiudiModale(); switchView('view-dashboard');">Salva e Chiudi</button>
+        `;
+
+        document.getElementById('modalTitle').innerText = "Report di Fine Allenamento";
+        document.getElementById('modalBody').innerHTML = htmlReport;
+        document.getElementById('dataModal').classList.add('active');
+    }
+
+    // ===============================================
+    // LOGICA AI CAMERA TRACKER
+    // ===============================================
+
+    let detector;
+    let cameraStream;
+    let aiAnimFrame;
+    let repCount = 0;
+    let repState = "up"; 
+    let isAiRunning = false;
+    let currentAiMode = 'rdl'; 
+
+    function apriMenuSelezioneAi() {
+        document.getElementById('aiSetupModal').classList.add('active');
+    }
+
+    function calcolaAngolo(a, b, c) {
+        let radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+        let angle = Math.abs(radians * 180.0 / Math.PI);
+        if (angle > 180.0) angle = 360 - angle;
+        return angle;
+    }
+
+    async function avviaAiCamera() {
+        currentAiMode = document.getElementById('aiExerciseTypeSelect').value;
+        document.getElementById('aiSetupModal').classList.remove('active');
+        document.getElementById('aiModal').classList.add('active');
+        
+        const video = document.getElementById('aiVideo');
+        repCount = 0;
+        repState = "up";
+        document.getElementById('aiRepCount').innerText = repCount;
+        document.getElementById('aiStateBadge').innerText = "Caricamento AI...";
+        document.getElementById('aiStateBadge').style.background = "var(--warning)";
+        
+        try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'user', width: 640, height: 480 } 
+            });
+            video.srcObject = cameraStream;
+            
+            await new Promise((resolve) => { video.onloadedmetadata = () => resolve(video); });
+            video.play();
+            
+            const detectorConfig = { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING };
+            detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, detectorConfig);
+            
+            isAiRunning = true;
+            document.getElementById('aiStateBadge').innerText = "Pronto - Inquadrati di profilo!";
+            rilevaPosa(); 
+            
+        } catch (e) {
+            alert("Errore fotocamera: Inquadratura negata o non supportata dal browser.");
+            chiudiAiCamera();
+        }
+    }
+
+    async function rilevaPosa() {
+        if (!isAiRunning) return;
+        
+        const video = document.getElementById('aiVideo');
+        const canvas = document.getElementById('aiCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        try {
+            const poses = await detector.estimatePoses(video);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (poses.length > 0) {
+                const keypoints = poses[0].keypoints;
+                const confidenceThreshold = 0.4;
+                
+                keypoints.forEach(point => {
+                    if (point.score > confidenceThreshold) {
+                        ctx.beginPath();
+                        ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
+                        ctx.fillStyle = "var(--drop)";
+                        ctx.fill();
+                    }
+                });
+                
+                let ptA, ptB, ptC;
+                let stateBadge = document.getElementById('aiStateBadge');
+                
+                if (currentAiMode === 'rdl') {
+                    ptA = keypoints.find(k => k.name === 'left_shoulder');
+                    ptB = keypoints.find(k => k.name === 'left_hip');
+                    ptC = keypoints.find(k => k.name === 'left_knee');
+                    
+                    if (ptA && ptB && ptC && ptA.score > confidenceThreshold && ptB.score > confidenceThreshold && ptC.score > confidenceThreshold) {
+                        disegnaLinee(ctx, ptA, ptB, ptC);
+                        let angle = calcolaAngolo(ptA, ptB, ptC);
+                        
+                        if (angle < 110) { 
+                            repState = "down"; 
+                            aggiornaBadge(stateBadge, "Giù", "var(--danger)"); 
+                        }
+                        if (angle > 155 && repState === "down") { 
+                            registraRipetizione(stateBadge, "Su"); 
+                        }
+                    } else {
+                        aggiornaBadge(stateBadge, "Inquadra Anca e Ginocchio!", "var(--warning)");
+                    }
+                } 
+                else if (currentAiMode === 'pullup') {
+                    ptA = keypoints.find(k => k.name === 'left_shoulder');
+                    ptB = keypoints.find(k => k.name === 'left_elbow');
+                    ptC = keypoints.find(k => k.name === 'left_wrist');
+                    
+                    if (ptA && ptB && ptC && ptA.score > confidenceThreshold && ptB.score > confidenceThreshold && ptC.score > confidenceThreshold) {
+                        disegnaLinee(ctx, ptA, ptB, ptC);
+                        let angle = calcolaAngolo(ptA, ptB, ptC);
+                        
+                        if (angle > 140) { 
+                            repState = "down"; 
+                            aggiornaBadge(stateBadge, "Braccia Tese", "var(--danger)"); 
+                        }
+                        if (angle < 90 && repState === "down") { 
+                            registraRipetizione(stateBadge, "Trazione Chiusa"); 
+                        }
+                    } else {
+                        aggiornaBadge(stateBadge, "Inquadra il braccio!", "var(--warning)");
+                    }
+                }
+                else if (currentAiMode === 'pushup') {
+                    ptA = keypoints.find(k => k.name === 'left_shoulder');
+                    ptB = keypoints.find(k => k.name === 'left_elbow');
+                    ptC = keypoints.find(k => k.name === 'left_wrist');
+                    
+                    if (ptA && ptB && ptC && ptA.score > confidenceThreshold && ptB.score > confidenceThreshold && ptC.score > confidenceThreshold) {
+                        disegnaLinee(ctx, ptA, ptB, ptC);
+                        let angle = calcolaAngolo(ptA, ptB, ptC);
+                        
+                        if (angle < 90) { 
+                            repState = "down"; 
+                            aggiornaBadge(stateBadge, "Bilanciere al petto", "var(--danger)"); 
+                        }
+                        if (angle > 150 && repState === "down") { 
+                            registraRipetizione(stateBadge, "Spinta Chiusa"); 
+                        }
+                    } else {
+                        aggiornaBadge(stateBadge, "Inquadra il braccio!", "var(--warning)");
+                    }
+                }
+            }
+        } catch(err) {
+            // Ignora errori di frame
+        }
+        
+        aiAnimFrame = requestAnimationFrame(rilevaPosa);
+    }
+
+    function disegnaLinee(ctx, a, b, c) {
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y);
+        ctx.strokeStyle = "var(--success)"; ctx.lineWidth = 4; ctx.stroke();
+    }
+    
+    function aggiornaBadge(el, text, color) {
+        if(el.innerText !== text) { el.innerText = text; el.style.background = color; }
+    }
+
+    function registraRipetizione(badgeEl, text) {
+        repState = "up"; repCount++; document.getElementById('aiRepCount').innerText = repCount;
+        aggiornaBadge(badgeEl, text, "var(--success)");
+        if (navigator.vibrate) navigator.vibrate(100);
+    }
+
+    function chiudiAiCamera() {
+        isAiRunning = false;
+        cancelAnimationFrame(aiAnimFrame);
+        if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+        document.getElementById('aiModal').classList.remove('active');
+    }
+
+    function trasferisciReps() {
+        let rows = document.querySelectorAll('#setsContainer .set-row');
+        if (rows.length > 0) {
+            let lastRow = rows[rows.length - 1];
+            let isUnilatRow = lastRow.querySelector('.reps-input-dx') !== null;
+            let repInput = isUnilatRow ? lastRow.querySelector('.reps-input-dx') : lastRow.querySelector('.reps-input');
+            if(repInput) {
+                repInput.value = repCount;
+                controllaCompletamentoRiga(repInput);
+            }
+        } else {
+            aggiungiSerie('normal', null, "", repCount);
+        }
+        chiudiAiCamera();
+    }
+</script>
+</body>
+</html>
