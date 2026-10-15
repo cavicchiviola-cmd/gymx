@@ -120,6 +120,8 @@
 
         <button class="btn-start-huge" onclick="apriSelezioneScheda()">▶ INIZIA ALLENAMENTO</button>
 
+        <div id="undoContainer"></div> <!-- Contenitore per pulsante Ripristino -->
+
         <button class="secondary" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-radius: 12px; margin-bottom: 10px; background: #2c2c2e; border: 1px solid #3a3a3c;" onclick="toggleGestioneSchede()">
             <span style="font-weight: bold; color: white;">⚙️ Gestione Schede</span>
             <span id="toggleSchedeIcon" style="font-size: 14px; color: var(--text-sec);">▼ Apri</span>
@@ -182,7 +184,6 @@
         <div class="header-flex" style="margin-bottom: 15px;">
             <h2 id="woRoutineName" style="margin: 0; font-size: 20px; max-width: 55%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Nome Scheda</h2>
             <div style="display:flex; gap: 8px; align-items:center;">
-                <!-- NUOVO PULSANTE ARCHIVIO IN WORKOUT -->
                 <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 14px; margin: 0; border-radius: 8px;" onclick="apriArchivio('view-workout')" title="Consulta Archivio senza perdere i dati in corso">🗂️ Dati</button>
                 <div id="totalWorkoutTimer" class="total-timer">00:00</div>
             </div>
@@ -191,13 +192,18 @@
         <div class="card">
             <div class="header-flex" style="margin-bottom: 5px;">
                 <div id="woProgress" class="progress-text" style="margin:0;">Esercizio 1 di X</div>
-                <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 12px; margin: 0;" onclick="posticipaEsercizioCorrente()">Posticipa 🔄</button>
+                <div style="display:flex; gap: 5px;">
+                    <!-- NUOVO: Toggle Gamba Singola / Unilaterale -->
+                    <label style="font-size: 11px; background: #2c2c2e; padding: 4px 8px; border-radius: 6px; border: 1px solid #3a3a3c; display:flex; align-items:center; gap:5px; color: var(--text-sec); cursor:pointer;">
+                        <input type="checkbox" id="unilateralToggle" onchange="toggleUnilateral()"> 🦵 Gamba Singola
+                    </label>
+                    <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 12px; margin: 0;" onclick="posticipaEsercizioCorrente()">Posticipa 🔄</button>
+                </div>
             </div>
             
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <h3 id="woExerciseName" style="margin: 0; display: flex; align-items: center; flex-wrap: wrap;">Nome Esercizio</h3>
                 <div style="display: flex; gap: 5px;">
-                    <!-- PULSANTE AI TRACKER AGGIUNTO QUI -->
                     <button class="secondary" style="width: auto; padding: 4px 8px; font-size: 12px; margin: 0; background: var(--drop); color: white; border: 1px solid #bf5af2;" onclick="apriMenuSelezioneAi()">🤖 AI Tracker</button>
                     <button class="secondary" style="width: auto; padding: 4px 8px; font-size: 12px; margin: 0;" onclick="sostituisciEsercizioCorrente()" title="Sostituisci esercizio corrente">✏️ Cambia</button>
                     <button class="secondary" style="width: auto; padding: 4px 8px; font-size: 12px; margin: 0;" onclick="aggiungiEsercizioInCoda()" title="Aggiungi esercizio extra">➕ Add Es.</button>
@@ -309,10 +315,8 @@
     </div>
 
 <script>
-    // Sistema globale di sicurezza per gli errori JavaScript
     window.onerror = function(msg, url, lineNo, columnNo, error) {
         console.error("Errore PWA: ", msg, "Riga: ", lineNo);
-        // Alert solo se è un errore bloccante per l'interfaccia, altrimenti logga solo.
         return false; 
     };
 
@@ -333,7 +337,6 @@
         "Corsa": "Cardio"
     };
     
-    // Controlli di sicurezza per evitare che vecchi localStorage corrotti blocchino l'app
     let userMuscleMap = defaultMuscleMap;
     try {
         let savedMap = localStorage.getItem('wk_muscle_map');
@@ -369,7 +372,7 @@
         }
     } catch(e) {}
 
-    let currentWorkout = { routineName: "", routineColor: "", exercises: [], currentExIndex: 0, recordedData: [] };
+    let currentWorkout = { routineName: "", routineColor: "", exercises: [], currentExIndex: 0, recordedData: [], isDeload: false, unilateralFlags: {} };
     let timerInterval, totalTimerInterval, workoutStartTime;
     let timerEndTime = null; 
     let editIndexRoutine = -1;
@@ -439,6 +442,7 @@
                 if (confirm("Hai un allenamento in sospeso non salvato. Vuoi riprenderlo?")) {
                     let state = JSON.parse(savedSession);
                     currentWorkout = state;
+                    if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
                     workoutStartTime = state.workoutStartTime || Date.now();
                     clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
                     switchView('view-workout'); caricaEsercizioCorrente(true);
@@ -747,10 +751,33 @@
                 </div>
             `;
         });
+        
+        let undoContainer = document.getElementById('undoContainer');
+        undoContainer.innerHTML = "";
+        if (localStorage.getItem('wk_closed_session_backup')) {
+             undoContainer.innerHTML = `<button class="warning" style="margin-bottom: 15px; font-weight:bold; box-shadow: 0 0 15px rgba(255, 214, 10, 0.4);" onclick="ripristinaAllenamentoChiuso()">↩️ Ripristina Allenamento Chiuso per Sbaglio</button>`;
+        }
+    }
+
+    function ripristinaAllenamentoChiuso() {
+        let backup = localStorage.getItem('wk_closed_session_backup');
+        if (backup) {
+            let state = JSON.parse(backup);
+            currentWorkout = state;
+            workoutStartTime = state.workoutStartTime || Date.now();
+            localStorage.removeItem('wk_closed_session_backup'); // consumato
+            localStorage.setItem('wk_active_session', JSON.stringify(currentWorkout)); // ripristina sessione attiva
+            clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
+            switchView('view-workout'); caricaEsercizioCorrente(true);
+        }
     }
 
     function apriSelezioneScheda() {
         let htmlMix = `
+            <label style="display:flex; align-items:center; gap:10px; background: rgba(255, 214, 10, 0.1); border: 1px solid var(--warning); padding: 15px; border-radius: 12px; margin-bottom: 20px; cursor: pointer;">
+                <input type="checkbox" id="deloadToggle" style="width:24px; height:24px;">
+                <span style="font-size:14px; color:var(--text); line-height: 1.3;"><b>Attiva Settimana di Scarico</b><br><span style="color:var(--warning); font-size:12px;">Riduce i target del 10% e taglia 1 serie (sessione non salvata nel DB)</span></span>
+            </label>
             <button style="background: linear-gradient(45deg, #bf5af2, #0a84ff); color: white; padding:20px; margin-bottom:25px; font-size:16px; border-radius:12px; font-weight:bold; box-shadow: 0 4px 15px rgba(0,0,0,0.4);" onclick="generaMixAI(); chiudiModale();">
                 ✨ GENERA MIX A.I. (Ottimizza Settimana)
             </button>
@@ -839,8 +866,11 @@
         let routine = routines[routineIndex];
         if (routine.exercises.length === 0) return alert("Scheda vuota! Aggiungi esercizi modificandola.");
         
+        let isDeloadActive = document.getElementById('deloadToggle') ? document.getElementById('deloadToggle').checked : false;
+
         pulisciStatoWorkout(); 
-        currentWorkout = { routineName: routine.name, routineColor: routine.color || "#0a84ff", exercises: [...routine.exercises], currentExIndex: 0, recordedData: [] };
+        localStorage.removeItem('wk_closed_session_backup');
+        currentWorkout = { routineName: routine.name, routineColor: routine.color || "#0a84ff", exercises: [...routine.exercises], currentExIndex: 0, recordedData: [], isDeload: isDeloadActive, unilateralFlags: {} };
         workoutStartTime = Date.now();
         clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
         switchView('view-workout'); caricaEsercizioCorrente();
@@ -939,9 +969,15 @@
     }
 
     function aggiornaBarbellMath() {
+        let isUnilat = currentWorkout.unilateralFlags && currentWorkout.unilateralFlags[currentWorkout.currentExIndex];
         let exName = currentWorkout.exercises[currentWorkout.currentExIndex].toLowerCase();
         let container = document.getElementById('barbellMathContainer');
-        if (!exName.includes("hip thrust") && !exName.includes("squat") && !exName.includes("panca piana")) { container.style.display = "none"; return; }
+        
+        // Se è gamba singola o non è esercizio da bilanciere classico, nascondiamo la mate del bilanciere
+        if (isUnilat || (!exName.includes("hip thrust") && !exName.includes("squat") && !exName.includes("panca piana"))) { 
+            container.style.display = "none"; 
+            return; 
+        }
         
         container.style.display = "block";
         let inputs = document.querySelectorAll('.kg-input'); let ultimoValore = 0;
@@ -983,6 +1019,13 @@
         }
     }
 
+    function toggleUnilateral() {
+        if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
+        currentWorkout.unilateralFlags[currentWorkout.currentExIndex] = document.getElementById('unilateralToggle').checked;
+        salvaStatoWorkout();
+        caricaEsercizioCorrente(true); // Ricarica coi parametri ricalcolati
+    }
+
     function caricaEsercizioCorrente(isRestoring = false) {
         clearInterval(timerInterval); timerEndTime = null; document.getElementById('timerDisplay').innerText = "00:00";
         let exName = currentWorkout.exercises[currentWorkout.currentExIndex];
@@ -991,6 +1034,9 @@
         document.getElementById('woProgress').innerText = `Esercizio ${currentWorkout.currentExIndex + 1} di ${currentWorkout.exercises.length}`;
         document.getElementById('woExerciseName').innerHTML = `${exName} <span class="badge" style="${generaStileBadge(gruppoMusc)}">${gruppoMusc}</span>`;
         
+        let isUnilat = currentWorkout.unilateralFlags && currentWorkout.unilateralFlags[currentWorkout.currentExIndex];
+        document.getElementById('unilateralToggle').checked = !!isUnilat;
+
         let pastSets = null;
         let pastNotes = null;
         let bestAllTimeSet = null; 
@@ -1003,7 +1049,7 @@
             let foundEx = historyData[i].data.find(e => normalizzaNome(e.name) === normalizzaNome(exName));
             if(foundEx) {
                 if (!pastSets) {
-                    pastSets = foundEx.sets;
+                    pastSets = JSON.parse(JSON.stringify(foundEx.sets)); // deep copy sicura
                     pastNotes = foundEx.notes;
                 }
                 
@@ -1018,12 +1064,12 @@
 
                     if (bestSetLoc && bestSetLoc.kg && bestSetLoc.reps) {
                         if (!bestAllTimeSet) {
-                            bestAllTimeSet = bestSetLoc;
+                            bestAllTimeSet = JSON.parse(JSON.stringify(bestSetLoc));
                         } else {
                             if (parseFloat(bestSetLoc.kg) > parseFloat(bestAllTimeSet.kg)) {
-                                bestAllTimeSet = bestSetLoc;
+                                bestAllTimeSet = JSON.parse(JSON.stringify(bestSetLoc));
                             } else if (parseFloat(bestSetLoc.kg) === parseFloat(bestAllTimeSet.kg) && parseInt(bestSetLoc.reps) > parseInt(bestAllTimeSet.reps)) {
-                                bestAllTimeSet = bestSetLoc;
+                                bestAllTimeSet = JSON.parse(JSON.stringify(bestSetLoc));
                             }
                         }
                     }
@@ -1031,11 +1077,41 @@
             }
         }
         
+        // APPLICAZIONE REGOLE SCARICO E UNILATERALE SUI TARGET
         if (bestAllTimeSet) {
-            let targKg = (parseFloat(bestAllTimeSet.kg) + 2.5).toFixed(1).replace('.0',''); 
-            let targReps = parseInt(bestAllTimeSet.reps) + 1;
-            targetTextEl.innerHTML = `<span style="font-size: 12px; font-weight: normal; color: var(--text-sec); display: block; margin-bottom: 3px;">🏆 Record Assoluto (PR): ${bestAllTimeSet.kg}kg x ${bestAllTimeSet.reps} rep</span>🎯 Target Overload: ${targKg}kg x ${bestAllTimeSet.reps} rep OPPURE ${bestAllTimeSet.kg}kg x ${targReps} rep`;
+            let baseKg = parseFloat(bestAllTimeSet.kg);
+            let baseReps = parseInt(bestAllTimeSet.reps);
+            
+            if (isUnilat) baseKg = baseKg * 0.55; // Deficit bilaterale
+            if (currentWorkout.isDeload) baseKg = baseKg * 0.9; // Calo intensità scarico
+            
+            let targKg = baseKg.toFixed(1).replace('.0','');
+
+            if (currentWorkout.isDeload) {
+                targetTextEl.innerHTML = `🧘 <b>SCARICO ATTIVO:</b> Target ricalcolato ${targKg}kg x ${baseReps} rep<br><span style="font-size:12px; font-weight:normal; color:var(--text-sec);">(Carichi del 10% e Volume tagliato)</span>`;
+            } else if (isUnilat) {
+                targetTextEl.innerHTML = `🦵 <b>DEFICIT BILATERALE (55%):</b> Target stimato ${targKg}kg x ${baseReps} rep`;
+            } else {
+                let targKgOver = (parseFloat(bestAllTimeSet.kg) + 2.5).toFixed(1).replace('.0',''); 
+                targetTextEl.innerHTML = `<span style="font-size: 12px; font-weight: normal; color: var(--text-sec); display: block; margin-bottom: 3px;">🏆 Record Assoluto (PR): ${bestAllTimeSet.kg}kg x ${bestAllTimeSet.reps} rep</span>🎯 Target Overload: ${targKgOver}kg x ${bestAllTimeSet.reps} rep OPPURE ${bestAllTimeSet.kg}kg x ${bestAllTimeSet.reps + 1} rep`;
+            }
             targetTextEl.style.display = "block";
+        }
+
+        // APPLICAZIONE REGOLE SCARICO E UNILATERALE SUI SET PASSATI
+        if (pastSets && pastSets.length > 0) {
+            if (currentWorkout.isDeload && pastSets.length > 1) {
+                pastSets.pop(); // Rimuove ultima serie (taglio volume -30%)
+            }
+            pastSets = pastSets.map(s => {
+                if(s.type === 'normal' && s.kg) {
+                    let k = parseFloat(s.kg);
+                    if(isUnilat) k *= 0.55;
+                    if(currentWorkout.isDeload) k *= 0.9;
+                    return {...s, kg: k.toFixed(1).replace('.0','')};
+                }
+                return s;
+            });
         }
         
         let pastNoteBox = document.getElementById('pastNoteBox');
@@ -1057,7 +1133,7 @@
 
         document.getElementById('setsContainer').innerHTML = "";
         
-        if (activeSessionSets && activeSessionSets.length > 0) {
+        if (activeSessionSets && activeSessionSets.length > 0 && isRestoring) {
             activeSessionSets.forEach((s, idx) => {
                 let matchingPast = pastSets && pastSets[idx] ? pastSets[idx] : (pastSets && pastSets[0] ? pastSets[0] : null);
                 aggiungiSerie(s.type || 'normal', matchingPast, s.kg, s.reps);
@@ -1247,15 +1323,21 @@
                 return;
             }
 
-            historyData.push({ 
-                date: dateStr, 
-                routine: currentWorkout.routineName, 
-                routineColor: currentWorkout.routineColor, 
-                data: finalData 
-            });
+            // Blocco salvataggio nel database storico saltato se è attiva la modalità Scarico
+            if (!currentWorkout.isDeload) {
+                historyData.push({ 
+                    date: dateStr, 
+                    routine: currentWorkout.routineName, 
+                    routineColor: currentWorkout.routineColor, 
+                    data: finalData 
+                });
+                localStorage.setItem('wk_history', JSON.stringify(historyData));
+            } else {
+                alert("🧘 Allenamento di Scarico terminato!\n\nI dati sono stati elaborati dall'AI Coach, ma non sono stati salvati nel Database Storico per non intaccare le tue metriche e grafici di prestazione massimale.");
+            }
             
-            localStorage.setItem('wk_history', JSON.stringify(historyData));
             pulisciStatoWorkout();
+            localStorage.removeItem('wk_closed_session_backup');
             
             generaReportAIPostWorkout(finalData);
 
@@ -1266,7 +1348,9 @@
     }
 
     function annullaWorkout() {
-        if(confirm("Vuoi davvero annullare questo allenamento? I dati non verranno salvati.")) {
+        if(confirm("Vuoi annullare e chiudere questo allenamento? Potrai ripristinarlo in un secondo momento.")) {
+            // Backup di sicurezza prima di chiudere
+            localStorage.setItem('wk_closed_session_backup', localStorage.getItem('wk_active_session'));
             clearInterval(totalTimerInterval); timerEndTime = null; pulisciStatoWorkout(); switchView('view-dashboard');
         }
     }
@@ -1298,6 +1382,8 @@
     // ===============================================
 
     function generaMixAI() {
+        let isDeloadActive = document.getElementById('deloadToggle') ? document.getElementById('deloadToggle').checked : false;
+
         let oggi = new Date();
         let giornoSettimana = oggi.getDay(); 
         let diffGiorni = oggi.getDate() - giornoSettimana + (giornoSettimana === 0 ? -6 : 1);
@@ -1353,13 +1439,17 @@
         });
 
         pulisciStatoWorkout(); 
+        localStorage.removeItem('wk_closed_session_backup');
+        
         currentWorkout = { 
             routineName: "✨ Mix Ottimizzato A.I.", 
             routineColor: "#bf5af2", 
             exercises: eserciziScelti, 
             currentExIndex: 0, 
             recordedData: [], 
-            workoutStartTime: Date.now() 
+            workoutStartTime: Date.now(),
+            isDeload: isDeloadActive,
+            unilateralFlags: {}
         };
         workoutStartTime = Date.now();
         clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000);
@@ -1596,7 +1686,7 @@
                 }
             }
         } catch(err) {
-            // Ignora errori di frame per non bloccare il loop
+            // Ignora errori di frame
         }
         
         aiAnimFrame = requestAnimationFrame(rilevaPosa);
