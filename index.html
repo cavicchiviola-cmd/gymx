@@ -60,8 +60,9 @@
         .set-row.type-drop { margin-left: 20px; border-left-color: var(--drop); opacity: 0.9; }
         .set-row.type-drop.completed { background-color: rgba(191, 90, 242, 0.05); border-radius: 0 8px 8px 0; padding-top: 4px; padding-bottom: 4px; }
         
-        .set-main { display: flex; gap: 8px; align-items: center; width: 100%; }
-        .set-row input { margin-bottom: 0; flex: 1; min-width: 60px; }
+        .set-main { display: flex; gap: 6px; align-items: center; width: 100%; }
+        /* Adattato il min-width per permettere 3 input nella stessa riga senza sbordare */
+        .set-row input { margin-bottom: 0; flex: 1; min-width: 40px; text-align: center; } 
         .set-controls { display: flex; gap: 4px; }
         .action-btn { background: #3a3a3c; color: white; border: none; border-radius: 6px; width: 34px; height: 34px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; padding: 0; margin: 0; font-size: 12px; }
         .action-btn.active-w { background: var(--warmup); }
@@ -193,7 +194,7 @@
             <div class="header-flex" style="margin-bottom: 5px;">
                 <div id="woProgress" class="progress-text" style="margin:0;">Esercizio 1 di X</div>
                 <div style="display:flex; gap: 5px;">
-                    <!-- NUOVO: Toggle Gamba Singola / Unilaterale -->
+                    <!-- Toggle Gamba Singola / Unilaterale -->
                     <label style="font-size: 11px; background: #2c2c2e; padding: 4px 8px; border-radius: 6px; border: 1px solid #3a3a3c; display:flex; align-items:center; gap:5px; color: var(--text-sec); cursor:pointer;">
                         <input type="checkbox" id="unilateralToggle" onchange="toggleUnilateral()"> 🦵 Gamba Singola
                     </label>
@@ -412,17 +413,25 @@
         document.getElementById('dataModal').classList.remove('active');
     }
 
+    // AGGIORNATO per salvare correttamente Reps Dx e Sx
     function salvaStatoWorkout() {
         if (!currentWorkout.routineName) return;
         let setRows = document.querySelectorAll('.set-row');
         let currentScreenSets = [];
         setRows.forEach(row => {
             let kgInput = row.querySelector('.kg-input');
-            let repsInput = row.querySelector('.reps-input');
-            if (kgInput && repsInput) {
-                currentScreenSets.push({ kg: kgInput.value, reps: repsInput.value, type: row.dataset.type });
+            let repsInputDx = row.querySelector('.reps-input-dx');
+            let repsInputSx = row.querySelector('.reps-input-sx');
+            let repsInputNorm = row.querySelector('.reps-input:not(.reps-input-dx):not(.reps-input-sx)');
+            
+            if (kgInput) {
+                let kgVal = kgInput.value;
+                let repsVal = repsInputDx ? repsInputDx.value : (repsInputNorm ? repsInputNorm.value : "");
+                let repsSxVal = repsInputSx ? repsInputSx.value : undefined;
+                currentScreenSets.push({ kg: kgVal, reps: repsVal, repsSx: repsSxVal, type: row.dataset.type });
             }
         });
+        
         let stateToSave = JSON.parse(JSON.stringify(currentWorkout));
         stateToSave.currentScreenSets = currentScreenSets;
         stateToSave.workoutStartTime = workoutStartTime;
@@ -557,6 +566,7 @@
         }
     }
 
+    // AGGIORNATO per leggere correttamente le ripetizioni unilaterali e sommarle al volume
     function apriStoricoEsercizio(exName) {
         let normEx = normalizzaNome(exName);
         let gruppo = ottieniGruppoMuscolare(normEx);
@@ -578,11 +588,18 @@
                     log.sets.forEach(s => {
                         if (s.kg && s.reps && s.type !== 'warmup') {
                             let k = parseFloat(s.kg);
-                            let r = parseInt(s.reps);
-                            volume += (k * r);
+                            let rEff = parseInt(s.reps || 0);
+                            let rTot = rEff;
+                            if (s.repsSx !== undefined) {
+                                let rSx = parseInt(s.repsSx || 0);
+                                rTot = rEff + rSx; // Il volume somma dx e sx
+                                rEff = Math.max(rEff, rSx); // Per il massimale consideriamo la migliore rep
+                            }
                             
-                            let effReps = r > 30 ? 30 : r;
-                            let current1RM = k / (1.0278 - (0.0278 * effReps)); 
+                            volume += (k * rTot);
+                            
+                            let repMaxLimit = rEff > 30 ? 30 : rEff;
+                            let current1RM = k / (1.0278 - (0.0278 * repMaxLimit)); 
                             if (current1RM > best1RM) best1RM = current1RM;
                         }
                     });
@@ -632,10 +649,17 @@
                         let kmStr = parseFloat(s.kg) > 0 ? ` | ${s.kg} km` : '';
                         return `${s.reps} min${kmStr}`;
                     } else {
-                        if (s.kg && s.reps) volumeTotale += (parseFloat(s.kg) * parseInt(s.reps));
                         let prefs = s.type === 'warmup' ? 'W' : (s.type === 'drop' ? '↳D' : `S${i+1}`);
                         let colorStr = s.type === 'warmup' ? 'color:var(--warmup);' : (s.type === 'drop' ? 'color:var(--drop);' : 'color:var(--text);');
-                        return `<span style="${colorStr} margin-right:8px; display:inline-block;">• ${prefs}: ${s.reps}x${s.kg}kg</span>`;
+                        
+                        let strRepOut = s.repsSx !== undefined ? `${s.reps}/${s.repsSx}` : s.reps;
+                        if (s.kg && s.reps) {
+                             let tr = parseInt(s.reps || 0);
+                             if(s.repsSx !== undefined) tr += parseInt(s.repsSx || 0);
+                             volumeTotale += (parseFloat(s.kg) * tr);
+                        }
+                        
+                        return `<span style="${colorStr} margin-right:8px; display:inline-block;">• ${prefs}: ${strRepOut}x${s.kg}kg</span>`;
                     }
                 }).join('<br>');
                 
@@ -692,6 +716,7 @@
         }
     }
 
+    // AGGIORNATO per renderizzare la doppia rep nel calendario
     function apriDettagliCalendario(dataStr) {
         let sessioniDelGiorno = historyData.filter(s => s.date === dataStr);
         let bodyHtml = "";
@@ -704,7 +729,8 @@
                     if (gruppo === "Cardio") return `${s.reps} min ${parseFloat(s.kg) > 0 ? '| ' + s.kg + ' km' : ''}`;
                     else {
                         let prefs = s.type === 'warmup' ? 'W' : (s.type === 'drop' ? '↳D' : `S${i+1}`);
-                        return `${prefs}: ${s.reps}x${s.kg}kg`;
+                        let strRepOut = s.repsSx !== undefined ? `${s.reps}/${s.repsSx}` : s.reps;
+                        return `${prefs}: ${strRepOut}x${s.kg}kg`;
                     }
                 }).join(' | ');
                 let noteHtml = ex.notes ? `<div style="font-size: 12px; color: var(--text-sec); font-style: italic; margin-top: 2px;">Note: ${ex.notes}</div>` : '';
@@ -765,8 +791,8 @@
             let state = JSON.parse(backup);
             currentWorkout = state;
             workoutStartTime = state.workoutStartTime || Date.now();
-            localStorage.removeItem('wk_closed_session_backup'); // consumato
-            localStorage.setItem('wk_active_session', JSON.stringify(currentWorkout)); // ripristina sessione attiva
+            localStorage.removeItem('wk_closed_session_backup'); 
+            localStorage.setItem('wk_active_session', JSON.stringify(currentWorkout)); 
             clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
             switchView('view-workout'); caricaEsercizioCorrente(true);
         }
@@ -973,7 +999,7 @@
         let exName = currentWorkout.exercises[currentWorkout.currentExIndex].toLowerCase();
         let container = document.getElementById('barbellMathContainer');
         
-        // Se è gamba singola o non è esercizio da bilanciere classico, nascondiamo la mate del bilanciere
+        // Se è gamba singola nascondiamo il bilanciere perché usiamo manubri/macchine
         if (isUnilat || (!exName.includes("hip thrust") && !exName.includes("squat") && !exName.includes("panca piana"))) { 
             container.style.display = "none"; 
             return; 
@@ -991,14 +1017,21 @@
         resultSpan.innerText = caricamento.length > 0 ? `Per lato: [ ${caricamento.join(' ] + [ ')} ]` : "Peso non standardizzabile.";
     }
 
+    // AGGIORNATO: Salva anche Reps Sx
     function salvaDatiEsercizioUI() {
         let setRows = document.querySelectorAll('.set-row');
         let setsData = [];
         setRows.forEach(row => {
             let kgInput = row.querySelector('.kg-input');
-            let repsInput = row.querySelector('.reps-input');
-            if (kgInput && repsInput) {
-                setsData.push({ kg: kgInput.value, reps: repsInput.value, type: row.dataset.type });
+            let repsInputDx = row.querySelector('.reps-input-dx');
+            let repsInputSx = row.querySelector('.reps-input-sx');
+            let repsInputNorm = row.querySelector('.reps-input:not(.reps-input-dx):not(.reps-input-sx)');
+            
+            if (kgInput) {
+                let kgVal = kgInput.value;
+                let repsVal = repsInputDx ? repsInputDx.value : (repsInputNorm ? repsInputNorm.value : "");
+                let repsSxVal = repsInputSx ? repsInputSx.value : undefined;
+                setsData.push({ kg: kgVal, reps: repsVal, repsSx: repsSxVal, type: row.dataset.type });
             }
         });
         
@@ -1023,7 +1056,7 @@
         if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
         currentWorkout.unilateralFlags[currentWorkout.currentExIndex] = document.getElementById('unilateralToggle').checked;
         salvaStatoWorkout();
-        caricaEsercizioCorrente(true); // Ricarica coi parametri ricalcolati
+        caricaEsercizioCorrente(true); // Ricarica coi parametri ricalcolati 
     }
 
     function caricaEsercizioCorrente(isRestoring = false) {
@@ -1049,7 +1082,7 @@
             let foundEx = historyData[i].data.find(e => normalizzaNome(e.name) === normalizzaNome(exName));
             if(foundEx) {
                 if (!pastSets) {
-                    pastSets = JSON.parse(JSON.stringify(foundEx.sets)); // deep copy sicura
+                    pastSets = JSON.parse(JSON.stringify(foundEx.sets)); 
                     pastNotes = foundEx.notes;
                 }
                 
@@ -1058,7 +1091,11 @@
                     let bestSetLoc = normalSets.reduce((best, current) => {
                         if (!best) return current;
                         if (parseFloat(current.kg) > parseFloat(best.kg)) return current;
-                        if (parseFloat(current.kg) === parseFloat(best.kg) && parseInt(current.reps) > parseInt(best.reps)) return current;
+                        
+                        let currentRep = current.repsSx !== undefined ? Math.max(parseInt(current.reps||0), parseInt(current.repsSx||0)) : parseInt(current.reps||0);
+                        let bestRep = best.repsSx !== undefined ? Math.max(parseInt(best.reps||0), parseInt(best.repsSx||0)) : parseInt(best.reps||0);
+                        
+                        if (parseFloat(current.kg) === parseFloat(best.kg) && currentRep > bestRep) return current;
                         return best;
                     }, null);
 
@@ -1068,8 +1105,13 @@
                         } else {
                             if (parseFloat(bestSetLoc.kg) > parseFloat(bestAllTimeSet.kg)) {
                                 bestAllTimeSet = JSON.parse(JSON.stringify(bestSetLoc));
-                            } else if (parseFloat(bestSetLoc.kg) === parseFloat(bestAllTimeSet.kg) && parseInt(bestSetLoc.reps) > parseInt(bestAllTimeSet.reps)) {
-                                bestAllTimeSet = JSON.parse(JSON.stringify(bestSetLoc));
+                            } else {
+                                let locRep = bestSetLoc.repsSx !== undefined ? Math.max(parseInt(bestSetLoc.reps||0), parseInt(bestSetLoc.repsSx||0)) : parseInt(bestSetLoc.reps||0);
+                                let allRep = bestAllTimeSet.repsSx !== undefined ? Math.max(parseInt(bestAllTimeSet.reps||0), parseInt(bestAllTimeSet.repsSx||0)) : parseInt(bestAllTimeSet.reps||0);
+                                
+                                if (parseFloat(bestSetLoc.kg) === parseFloat(bestAllTimeSet.kg) && locRep > allRep) {
+                                    bestAllTimeSet = JSON.parse(JSON.stringify(bestSetLoc));
+                                }
                             }
                         }
                     }
@@ -1077,36 +1119,36 @@
             }
         }
         
-        // APPLICAZIONE REGOLE SCARICO E UNILATERALE SUI TARGET
         if (bestAllTimeSet) {
             let baseKg = parseFloat(bestAllTimeSet.kg);
-            let baseReps = parseInt(bestAllTimeSet.reps);
+            let baseReps = bestAllTimeSet.repsSx !== undefined ? Math.max(parseInt(bestAllTimeSet.reps||0), parseInt(bestAllTimeSet.repsSx||0)) : parseInt(bestAllTimeSet.reps||0);
             
-            if (isUnilat) baseKg = baseKg * 0.55; // Deficit bilaterale
-            if (currentWorkout.isDeload) baseKg = baseKg * 0.9; // Calo intensità scarico
+            if (isUnilat && bestAllTimeSet.repsSx === undefined) baseKg = baseKg * 0.55; 
+            if (!isUnilat && bestAllTimeSet.repsSx !== undefined) baseKg = baseKg / 0.55; // Reverse
+            if (currentWorkout.isDeload) baseKg = baseKg * 0.9; 
             
             let targKg = baseKg.toFixed(1).replace('.0','');
 
             if (currentWorkout.isDeload) {
-                targetTextEl.innerHTML = `🧘 <b>SCARICO ATTIVO:</b> Target ricalcolato ${targKg}kg x ${baseReps} rep<br><span style="font-size:12px; font-weight:normal; color:var(--text-sec);">(Carichi del 10% e Volume tagliato)</span>`;
+                targetTextEl.innerHTML = `🧘 <b>SCARICO:</b> Target ${targKg}kg x ${baseReps} rep<br><span style="font-size:12px; font-weight:normal; color:var(--text-sec);">(Carichi del 10% e Volume tagliato)</span>`;
             } else if (isUnilat) {
-                targetTextEl.innerHTML = `🦵 <b>DEFICIT BILATERALE (55%):</b> Target stimato ${targKg}kg x ${baseReps} rep`;
+                targetTextEl.innerHTML = `🦵 <b>GAMBA SINGOLA:</b> Target ${targKg}kg x ${baseReps} rep`;
             } else {
-                let targKgOver = (parseFloat(bestAllTimeSet.kg) + 2.5).toFixed(1).replace('.0',''); 
-                targetTextEl.innerHTML = `<span style="font-size: 12px; font-weight: normal; color: var(--text-sec); display: block; margin-bottom: 3px;">🏆 Record Assoluto (PR): ${bestAllTimeSet.kg}kg x ${bestAllTimeSet.reps} rep</span>🎯 Target Overload: ${targKgOver}kg x ${bestAllTimeSet.reps} rep OPPURE ${bestAllTimeSet.kg}kg x ${bestAllTimeSet.reps + 1} rep`;
+                let targKgOver = (baseKg + 2.5).toFixed(1).replace('.0',''); 
+                targetTextEl.innerHTML = `<span style="font-size: 12px; font-weight: normal; color: var(--text-sec); display: block; margin-bottom: 3px;">🏆 PR Storico: ${baseKg.toFixed(1).replace('.0','')}kg x ${baseReps} rep</span>🎯 Target Overload: ${targKgOver}kg x ${baseReps} rep OPPURE ${baseKg.toFixed(1).replace('.0','')}kg x ${baseReps + 1} rep`;
             }
             targetTextEl.style.display = "block";
         }
 
-        // APPLICAZIONE REGOLE SCARICO E UNILATERALE SUI SET PASSATI
         if (pastSets && pastSets.length > 0) {
             if (currentWorkout.isDeload && pastSets.length > 1) {
-                pastSets.pop(); // Rimuove ultima serie (taglio volume -30%)
+                pastSets.pop(); 
             }
             pastSets = pastSets.map(s => {
                 if(s.type === 'normal' && s.kg) {
                     let k = parseFloat(s.kg);
-                    if(isUnilat) k *= 0.55;
+                    if(isUnilat && s.repsSx === undefined) k *= 0.55;
+                    if(!isUnilat && s.repsSx !== undefined) k /= 0.55;
                     if(currentWorkout.isDeload) k *= 0.9;
                     return {...s, kg: k.toFixed(1).replace('.0','')};
                 }
@@ -1136,12 +1178,12 @@
         if (activeSessionSets && activeSessionSets.length > 0 && isRestoring) {
             activeSessionSets.forEach((s, idx) => {
                 let matchingPast = pastSets && pastSets[idx] ? pastSets[idx] : (pastSets && pastSets[0] ? pastSets[0] : null);
-                aggiungiSerie(s.type || 'normal', matchingPast, s.kg, s.reps);
+                aggiungiSerie(s.type || 'normal', matchingPast, s.kg, s.reps, s.repsSx);
             });
         } else if (isRestoring && currentWorkout.currentScreenSets && currentWorkout.currentScreenSets.length > 0) {
             currentWorkout.currentScreenSets.forEach((s, idx) => {
                 let matchingPast = pastSets && pastSets[idx] ? pastSets[idx] : null;
-                aggiungiSerie(s.type || 'normal', matchingPast, s.kg, s.reps);
+                aggiungiSerie(s.type || 'normal', matchingPast, s.kg, s.reps, s.repsSx);
             });
         } else if (pastSets && pastSets.length > 0) {
             pastSets.forEach((vecchiaSerie) => aggiungiSerie(vecchiaSerie.type || 'normal', vecchiaSerie));
@@ -1172,18 +1214,26 @@
         return Math.max(1, Math.round(rCalculated));
     }
 
+    // AGGIORNATO: Check input completi anche per Sx se unilaterale
     function controllaCompletamentoRiga(inputElement) {
         let row = inputElement.closest('.set-row');
         let kgInputVal = row.querySelector('.kg-input').value;
-        let repsInputVal = row.querySelector('.reps-input').value;
+        let isUnilatRow = row.querySelector('.reps-input-dx') !== null;
+        let repsInputVal = isUnilatRow ? row.querySelector('.reps-input-dx').value : row.querySelector('.reps-input').value;
+        let repsSxInputVal = isUnilatRow ? row.querySelector('.reps-input-sx').value : null;
+
+        if (isUnilatRow) {
+            if (kgInputVal !== "" && repsInputVal !== "" && repsSxInputVal !== "") row.classList.add('completed');
+            else row.classList.remove('completed');
+        } else {
+            if (kgInputVal !== "" && repsInputVal !== "") row.classList.add('completed');
+            else row.classList.remove('completed');
+        }
+        
         let feedbackEl = row.querySelector('.set-feedback');
-        
-        if (kgInputVal !== "" && repsInputVal !== "") row.classList.add('completed');
-        else row.classList.remove('completed');
-        
         let kgTyped = parseFloat(kgInputVal);
         let pastKg = parseFloat(row.dataset.pastKg);
-        let pastReps = parseInt(row.dataset.pastReps);
+        let pastReps = parseInt(row.dataset.pastReps); // Max(Dx,Sx) stimato prima
 
         if (feedbackEl) {
             if (!isNaN(kgTyped) && kgTyped > 0 && !isNaN(pastKg) && !isNaN(pastReps) && pastReps > 0) {
@@ -1191,12 +1241,12 @@
                 
                 if (kgTyped > pastKg) {
                     let minReq = calcolaRepsEquivalenti1RM(pastKg, pastReps, kgTyped);
-                    feedbackEl.innerHTML = `⚡ <b>+${(kgTyped - pastKg).toFixed(1).replace('.0','')}kg</b> rispetto a ${pastKg}kg: punta a <b>${minReq} reps</b> per pareggiare il massimale, o <b>${minReq + 1}+ reps</b> per superarlo!`;
+                    feedbackEl.innerHTML = `⚡ <b>+${(kgTyped - pastKg).toFixed(1).replace('.0','')}kg</b>: fai <b>${minReq} reps</b> per pareggiare il massimale, o <b>${minReq + 1}+ reps</b> per superarlo!`;
                 } else if (kgTyped === pastKg) {
-                    feedbackEl.innerHTML = `🎯 <b>Stesso carico (${pastKg}kg)</b>: per progredire punta ad almeno <b>${pastReps + 1} reps</b> (scorsa volta: ${pastReps}).`;
+                    feedbackEl.innerHTML = `🎯 <b>Stesso carico (${pastKg}kg)</b>: punta ad almeno <b>${pastReps + 1} reps</b> (scorsa volta: ${pastReps}).`;
                 } else {
                     let minReq = Math.max(pastReps + 1, calcolaRepsEquivalenti1RM(pastKg, pastReps, kgTyped));
-                    feedbackEl.innerHTML = `💡 <b>Carico ridotto (-${(pastKg - kgTyped).toFixed(1).replace('.0','')}kg)</b>: punta ad almeno <b>${minReq} reps</b> per compensare a parità di stimolo.`;
+                    feedbackEl.innerHTML = `💡 <b>Carico ridotto (-${(pastKg - kgTyped).toFixed(1).replace('.0','')}kg)</b>: punta ad almeno <b>${minReq} reps</b>.`;
                 }
             } else {
                 feedbackEl.style.display = "none";
@@ -1214,14 +1264,23 @@
         salvaStatoWorkout();
     }
 
-    function aggiungiSerie(tipoAtteso = 'normal', pastSet = null, restoreKg = "", restoreReps = "") {
+    // AGGIORNATO: Rende 3 input se isUnilat
+    function aggiungiSerie(tipoAtteso = 'normal', pastSet = null, restoreKg = "", restoreReps = "", restoreRepsSx = "") {
         const container = document.getElementById('setsContainer');
         let mainSetsCount = container.querySelectorAll('.set-row.type-normal, .set-row.type-warmup').length;
         let setNumStr = tipoAtteso === 'drop' ? '↳' : `${mainSetsCount + 1}°`;
         
+        let isUnilat = currentWorkout.unilateralFlags && currentWorkout.unilateralFlags[currentWorkout.currentExIndex];
+        
         let phKg = pastSet && pastSet.kg ? pastSet.kg : "Kg"; 
-        let phReps = pastSet && pastSet.reps ? pastSet.reps : "Reps";
-        let isWarmup = pastSet && pastSet.type === 'warmup'; let customPhClass = isWarmup ? "orange-placeholder" : "";
+        
+        // Se pastSet è unilat prepariamo i placeholder unilat, se switch da bi a uni adatta il form
+        let tempBaseRep = pastSet && pastSet.reps ? pastSet.reps : "Reps";
+        let phRepsDx = pastSet && pastSet.reps ? pastSet.reps : (isUnilat ? "Dx" : "Reps");
+        let phRepsSx = pastSet && pastSet.repsSx !== undefined ? pastSet.repsSx : (isUnilat ? "Sx" : "Reps");
+        
+        let isWarmup = pastSet && pastSet.type === 'warmup'; 
+        let customPhClass = isWarmup ? "orange-placeholder" : "";
 
         const div = document.createElement('div'); 
         div.className = `set-row type-${tipoAtteso}`; 
@@ -1229,26 +1288,47 @@
         
         if (pastSet) {
             div.dataset.pastKg = pastSet.kg !== undefined ? pastSet.kg : "";
-            div.dataset.pastReps = pastSet.reps !== undefined ? pastSet.reps : "";
+            // Per il calcolo target, usiamo la reps max
+            let rMax = parseInt(pastSet.reps || 0);
+            if (pastSet.repsSx !== undefined) rMax = Math.max(rMax, parseInt(pastSet.repsSx || 0));
+            div.dataset.pastReps = rMax !== 0 ? rMax : "";
         }
         
         let btnWarmup = tipoAtteso !== 'drop' ? `<button class="action-btn ${tipoAtteso === 'warmup' ? 'active-w' : ''}" onclick="toggleWarmup(this)">W</button>` : '';
         let btnDrop = tipoAtteso !== 'drop' ? `<button class="action-btn" style="background:#bf5af2;" onclick="aggiungiSerie('drop'); salvaStatoWorkout();">↳D</button>` : '';
 
-        div.innerHTML = `
-            <div class="set-main">
-                <span class="set-number" style="width:25px; font-weight:bold; color: var(--text-sec); text-align:center;">${setNumStr}</span>
-                <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${restoreKg}" oninput="controllaCompletamentoRiga(this)">
-                <input type="number" placeholder="${phReps}" class="reps-input ${customPhClass}" value="${restoreReps}" oninput="controllaCompletamentoRiga(this)">
-                <div class="set-controls">
-                    ${btnWarmup}${btnDrop}
-                    <button class="action-btn danger-btn" onclick="rimuoviSerie(this)">X</button>
+        if (isUnilat) {
+            // UI a 3 input
+            div.innerHTML = `
+                <div class="set-main">
+                    <span class="set-number" style="width:25px; font-weight:bold; color: var(--text-sec); text-align:center;">${setNumStr}</span>
+                    <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${restoreKg}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" placeholder="Dx ${phRepsDx !== 'Dx' ? phRepsDx : ''}" class="reps-input reps-input-dx ${customPhClass}" value="${restoreReps}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" placeholder="Sx ${phRepsSx !== 'Sx' ? phRepsSx : ''}" class="reps-input reps-input-sx ${customPhClass}" value="${restoreRepsSx}" oninput="controllaCompletamentoRiga(this)">
+                    <div class="set-controls">
+                        ${btnWarmup}${btnDrop}
+                        <button class="action-btn danger-btn" onclick="rimuoviSerie(this)">X</button>
+                    </div>
                 </div>
-            </div>
-            <div class="set-feedback" style="display:none;"></div>
-        `;
+                <div class="set-feedback" style="display:none;"></div>
+            `;
+        } else {
+            // UI a 2 input (classica)
+            div.innerHTML = `
+                <div class="set-main">
+                    <span class="set-number" style="width:25px; font-weight:bold; color: var(--text-sec); text-align:center;">${setNumStr}</span>
+                    <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${restoreKg}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" placeholder="${tempBaseRep}" class="reps-input ${customPhClass}" value="${restoreReps}" oninput="controllaCompletamentoRiga(this)">
+                    <div class="set-controls">
+                        ${btnWarmup}${btnDrop}
+                        <button class="action-btn danger-btn" onclick="rimuoviSerie(this)">X</button>
+                    </div>
+                </div>
+                <div class="set-feedback" style="display:none;"></div>
+            `;
+        }
         
-        if (restoreKg && restoreReps) {
+        if (restoreKg && restoreReps && (!isUnilat || (isUnilat && restoreRepsSx))) {
             div.classList.add('completed');
             setTimeout(() => {
                 let kgInput = div.querySelector('.kg-input');
@@ -1297,6 +1377,7 @@
         }, 1000);
     }
 
+    // AGGIORNATO per finalizzare salvataggio con dati Dx e Sx
     function prossimoEsercizio() {
         salvaDatiEsercizioUI(); 
         
@@ -1309,9 +1390,10 @@
                     return {
                         name: ex.name,
                         notes: ex.notes || "",
-                        sets: ex.sets.filter(s => s.kg !== "" && s.reps !== "").map(s => ({
+                        sets: ex.sets.filter(s => s.kg !== "" && (s.reps !== "" || s.repsSx !== undefined)).map(s => ({
                             kg: parseFloat(s.kg), 
-                            reps: parseInt(s.reps), 
+                            reps: parseInt(s.reps || 0), 
+                            repsSx: s.repsSx !== undefined ? parseInt(s.repsSx || 0) : undefined,
                             type: s.type
                         }))
                     };
@@ -1323,7 +1405,6 @@
                 return;
             }
 
-            // Blocco salvataggio nel database storico saltato se è attiva la modalità Scarico
             if (!currentWorkout.isDeload) {
                 historyData.push({ 
                     date: dateStr, 
@@ -1349,7 +1430,6 @@
 
     function annullaWorkout() {
         if(confirm("Vuoi annullare e chiudere questo allenamento? Potrai ripristinarlo in un secondo momento.")) {
-            // Backup di sicurezza prima di chiudere
             localStorage.setItem('wk_closed_session_backup', localStorage.getItem('wk_active_session'));
             clearInterval(totalTimerInterval); timerEndTime = null; pulisciStatoWorkout(); switchView('view-dashboard');
         }
@@ -1459,6 +1539,7 @@
     function generaReportAIPostWorkout(workoutData) {
         let tonnellaggioTotale = 0;
         let serieTotali = 0;
+        let repsTotalNumber = 0;
         let feedbackOrdine = "";
         let commentoAllenamento = "";
         let muscoliLavorati = new Set();
@@ -1469,7 +1550,10 @@
             
             ex.sets.forEach(s => {
                 if (s.type !== 'warmup' && s.kg && s.reps) {
-                    tonnellaggioTotale += (parseFloat(s.kg) * parseInt(s.reps));
+                    let tr = parseInt(s.reps || 0);
+                    if(s.repsSx !== undefined) tr += parseInt(s.repsSx || 0);
+                    tonnellaggioTotale += (parseFloat(s.kg) * tr);
+                    repsTotalNumber += tr;
                     serieTotali++;
                 }
             });
@@ -1496,8 +1580,10 @@
             commentoAllenamento += " 🔥 Ottimo lavoro sui carichi per i glutei, il tonnellaggio è notevole.";
         }
 
-        let repsMedie = workoutData.reduce((acc, ex) => acc + ex.sets.reduce((sum, s) => sum + parseInt(s.reps || 0), 0), 0) / serieTotali;
-        let intensita = repsMedie > 11 ? "Metabolica (Resistenza/Pump)" : (repsMedie < 6 ? "Neurologica (Forza Max)" : "Ipertrofica (Massa/Volume)");
+        let repsMedie = serieTotali > 0 ? (repsTotalNumber / serieTotali) : 0;
+        // Nel caso di unilat le rep sono somme (es 10+10 = 20). 
+        // Calibriamo i commenti in base al fatto se superano 22 reps totali o no.
+        let intensita = repsMedie > 16 ? "Metabolica (Resistenza/Pump)" : (repsMedie < 8 ? "Neurologica (Forza Max)" : "Ipertrofica (Massa/Volume)");
 
         let htmlReport = `
             <div style="text-align: center; margin-bottom: 20px;">
@@ -1714,11 +1800,13 @@
         document.getElementById('aiModal').classList.remove('active');
     }
 
+    // Se stiamo usando AI tracker in modalità gamba singola, l'AI scriverà nella casella principale Dx. 
     function trasferisciReps() {
         let rows = document.querySelectorAll('#setsContainer .set-row');
         if (rows.length > 0) {
             let lastRow = rows[rows.length - 1];
-            let repInput = lastRow.querySelector('.reps-input');
+            let isUnilatRow = lastRow.querySelector('.reps-input-dx') !== null;
+            let repInput = isUnilatRow ? lastRow.querySelector('.reps-input-dx') : lastRow.querySelector('.reps-input');
             if(repInput) {
                 repInput.value = repCount;
                 controllaCompletamentoRiga(repInput);
