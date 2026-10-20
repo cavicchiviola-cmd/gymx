@@ -120,7 +120,7 @@
 
         <button class="btn-start-huge" onclick="apriSelezioneScheda()">▶ INIZIA ALLENAMENTO</button>
 
-        <div id="undoContainer"></div> <!-- Contenitore per pulsanti di Ripristino -->
+        <div id="undoContainer"></div>
 
         <button class="secondary" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-radius: 12px; margin-bottom: 10px; background: #2c2c2e; border: 1px solid #3a3a3c;" onclick="toggleGestioneSchede()">
             <span style="font-weight: bold; color: white;">⚙️ Gestione Schede</span>
@@ -193,7 +193,6 @@
             <div class="header-flex" style="margin-bottom: 5px;">
                 <div id="woProgress" class="progress-text" style="margin:0;">Esercizio 1 di X</div>
                 <div style="display:flex; gap: 5px;">
-                    <!-- Toggle Gamba Singola / Unilaterale -->
                     <label style="font-size: 11px; background: #2c2c2e; padding: 4px 8px; border-radius: 6px; border: 1px solid #3a3a3c; display:flex; align-items:center; gap:5px; color: var(--text-sec); cursor:pointer;">
                         <input type="checkbox" id="unilateralToggle" onchange="toggleUnilateral()"> 🦵 Gamba Singola
                     </label>
@@ -220,7 +219,7 @@
             </div>
             
             <div id="setsContainer"></div>
-            <button class="secondary" onclick="aggiungiSerie('normal')" style="margin-top: 10px;">+ Aggiungi Serie</button>
+            <button class="secondary" onclick="aggiungiSerie('normal'); salvaStatoWorkout();" style="margin-top: 10px;">+ Aggiungi Serie</button>
             
             <div style="margin-top: 15px;">
                 <label style="font-size: 12px; font-weight: bold; color: var(--text-sec); display: block; margin-bottom: 4px;">📝 Note Esercizio (es. regolazione macchinario, sensazioni):</label>
@@ -412,30 +411,17 @@
         document.getElementById('dataModal').classList.remove('active');
     }
 
+    // CORREZIONE: Sincronizza sempre la UI corrente dentro currentWorkout.recordedData E salva nel localStorage
     function salvaStatoWorkout() {
         if (!currentWorkout.routineName) return;
-        let setRows = document.querySelectorAll('.set-row');
-        let currentScreenSets = [];
-        setRows.forEach(row => {
-            let kgInput = row.querySelector('.kg-input');
-            let repsInputDx = row.querySelector('.reps-input-dx');
-            let repsInputSx = row.querySelector('.reps-input-sx');
-            let repsInputNorm = row.querySelector('.reps-input:not(.reps-input-dx):not(.reps-input-sx)');
-            
-            if (kgInput) {
-                let kgVal = kgInput.value;
-                let repsVal = repsInputDx ? repsInputDx.value : (repsInputNorm ? repsInputNorm.value : "");
-                let repsSxVal = repsInputSx ? repsInputSx.value : undefined;
-                currentScreenSets.push({ kg: kgVal, reps: repsVal, repsSx: repsSxVal, type: row.dataset.type });
-            }
-        });
         
+        salvaDatiEsercizioUI(); 
+        
+        let currentExObj = currentWorkout.recordedData[currentWorkout.currentExIndex];
         let stateToSave = JSON.parse(JSON.stringify(currentWorkout));
-        stateToSave.currentScreenSets = currentScreenSets;
+        stateToSave.currentScreenSets = currentExObj ? currentExObj.sets : [];
+        stateToSave.currentScreenNotes = currentExObj ? currentExObj.notes : '';
         stateToSave.workoutStartTime = workoutStartTime;
-        
-        let notesEl = document.getElementById('woExerciseNotes');
-        stateToSave.currentScreenNotes = notesEl ? notesEl.value : '';
         
         localStorage.setItem('wk_active_session', JSON.stringify(stateToSave));
     }
@@ -450,6 +436,7 @@
                     let state = JSON.parse(savedSession);
                     currentWorkout = state;
                     if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
+                    if(!currentWorkout.recordedData) currentWorkout.recordedData = [];
                     workoutStartTime = state.workoutStartTime || Date.now();
                     clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
                     switchView('view-workout'); caricaEsercizioCorrente(true);
@@ -489,6 +476,9 @@
     }
 
     function apriArchivio(fromView = 'view-dashboard') {
+        if (fromView === 'view-workout') {
+            salvaStatoWorkout();
+        }
         viewBeforeArchive = fromView;
         switchView('view-archive');
         if(undoStack.length > 0) document.getElementById('btnUndo').style.display = "block";
@@ -641,7 +631,7 @@
 
             logs.reverse().forEach(log => {
                 let volumeTotale = 0;
-                let stringaSerie = log.sets.map((s, i) => {
+                let stringaSerie = (log.sets && log.sets.length > 0) ? log.sets.map((s, i) => {
                     if (gruppo === "Cardio") {
                         let kmStr = parseFloat(s.kg) > 0 ? ` | ${s.kg} km` : '';
                         return `${s.reps} min${kmStr}`;
@@ -658,7 +648,7 @@
                         
                         return `<span style="${colorStr} margin-right:8px; display:inline-block;">• ${prefs}: ${strRepOut}x${s.kg}kg</span>`;
                     }
-                }).join('<br>');
+                }).join('<br>') : '<span style="color:var(--text-sec); font-size:13px;">Nessuna serie registrata</span>';
                 
                 let noteHtml = log.notes ? `<div style="margin-top:6px; font-size:12px; color:var(--text-sec); font-style:italic;">📝 ${log.notes}</div>` : '';
                 let volumeHtml = (gruppo !== "Cardio" && volumeTotale > 0) ? `<div style="margin-top: 6px; font-size: 13px; color: var(--warning);">Volume Load: <b>${volumeTotale} kg</b></div>` : '';
@@ -713,28 +703,25 @@
         }
     }
 
-    // MODIFICATA: Aggiunto pulsante Elimina Sessione per annullare salvataggi errati dal Calendario
     function apriDettagliCalendario(dataStr) {
         let sessioniDelGiorno = historyData.filter(s => s.date === dataStr);
         let bodyHtml = "";
         
         sessioniDelGiorno.forEach((sess) => {
             let rColor = sess.routineColor || (sess.routine === "Sessione Cardio" ? "#34c759" : "#0a84ff");
-            
-            // Indice reale nel DB globale
             let realIndex = historyData.indexOf(sess);
 
             let exHtml = sess.data.map(ex => {
                 let gruppo = ottieniGruppoMuscolare(ex.name);
-                let setsHtml = ex.sets.map((s, i) => {
+                let setsHtml = (ex.sets && ex.sets.length > 0) ? ex.sets.map((s, i) => {
                     if (gruppo === "Cardio") return `${s.reps} min ${parseFloat(s.kg) > 0 ? '| ' + s.kg + ' km' : ''}`;
                     else {
                         let prefs = s.type === 'warmup' ? 'W' : (s.type === 'drop' ? '↳D' : `S${i+1}`);
                         let strRepOut = s.repsSx !== undefined ? `${s.reps}/${s.repsSx}` : s.reps;
                         return `${prefs}: ${strRepOut}x${s.kg}kg`;
                     }
-                }).join(' | ');
-                let noteHtml = ex.notes ? `<div style="font-size: 12px; color: var(--text-sec); font-style: italic; margin-top: 2px;">Note: ${ex.notes}</div>` : '';
+                }).join(' | ') : '<i>Solo note</i>';
+                let noteHtml = ex.notes ? `<div style="font-size: 12px; color: var(--text-sec); font-style: italic; margin-top: 2px;">📝 Note: ${ex.notes}</div>` : '';
                 return `<div style="margin-top: 12px; font-size: 14px;"><b style="color: white;">${ex.name}</b><br><span style="color: var(--text-sec); font-size: 13px;">${setsHtml}</span>${noteHtml}</div>`;
             }).join('');
 
@@ -752,7 +739,6 @@
         document.getElementById('dataModal').classList.add('active');
     }
 
-    // NUOVA FUNZIONE: Elimina Sessione Intera (se salvata per sbaglio a posteriori)
     function eliminaSessioneStorico(indexDatabase) {
         if(confirm("⚠️ Vuoi davvero eliminare questo intero allenamento dallo storico?\n\nI dati sui volumi e i massimali di quella giornata verranno rimossi. L'azione è irreversibile.")) {
             historyData.splice(indexDatabase, 1);
@@ -793,12 +779,10 @@
         let undoContainer = document.getElementById('undoContainer');
         undoContainer.innerHTML = "";
         
-        // Tasto ripristino per allenamento ANNULLATO
         if (localStorage.getItem('wk_closed_session_backup')) {
              undoContainer.innerHTML += `<button class="warning" style="margin-bottom: 10px; font-weight:bold; box-shadow: 0 0 15px rgba(255, 214, 10, 0.4);" onclick="ripristinaAllenamentoChiuso()">↩️ Ripristina Allenamento Annullato</button>`;
         }
         
-        // Tasto ripristino per allenamento SALVATO di recente
         if (localStorage.getItem('wk_last_saved_backup')) {
              undoContainer.innerHTML += `<button class="secondary" style="margin-bottom: 15px; background: #3a3a3c;" onclick="tornaIndietroAlWorkout()">✏️ Riapri ultimo allenamento salvato</button>`;
         }
@@ -809,28 +793,31 @@
         if (backup) {
             let state = JSON.parse(backup);
             currentWorkout = state;
+            if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
+            if(!currentWorkout.recordedData) currentWorkout.recordedData = [];
             workoutStartTime = state.workoutStartTime || Date.now();
             localStorage.removeItem('wk_closed_session_backup'); 
-            localStorage.removeItem('wk_last_saved_backup'); // Pulisce interferenze
+            localStorage.removeItem('wk_last_saved_backup');
             localStorage.setItem('wk_active_session', JSON.stringify(currentWorkout)); 
             clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
             switchView('view-workout'); caricaEsercizioCorrente(true);
         }
     }
 
-    // NUOVA FUNZIONE: Ripristina e riapre il workout subito dopo aver premuto "Salva"
     function tornaIndietroAlWorkout() {
         let backup = localStorage.getItem('wk_last_saved_backup');
         if (backup) {
             let state = JSON.parse(backup);
             currentWorkout = state;
+            if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
+            if(!currentWorkout.recordedData) currentWorkout.recordedData = [];
             
-            // Rimuoviamo l'ultimo elemento salvato dallo storico (se non era un deload) per "annullare" il salvataggio
             if (!currentWorkout.isDeload && historyData.length > 0) {
                 historyData.pop();
                 localStorage.setItem('wk_history', JSON.stringify(historyData));
             }
             
+            localStorage.removeItem('wk_last_saved_backup');
             localStorage.setItem('wk_active_session', JSON.stringify(currentWorkout)); 
             
             workoutStartTime = currentWorkout.workoutStartTime || Date.now();
@@ -940,7 +927,7 @@
 
         pulisciStatoWorkout(); 
         localStorage.removeItem('wk_closed_session_backup');
-        localStorage.removeItem('wk_last_saved_backup'); // Pulizia per non riaprire save vecchi
+        localStorage.removeItem('wk_last_saved_backup');
         currentWorkout = { routineName: routine.name, routineColor: routine.color || "#0a84ff", exercises: [...routine.exercises], currentExIndex: 0, recordedData: [], isDeload: isDeloadActive, unilateralFlags: {} };
         workoutStartTime = Date.now();
         clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
@@ -953,10 +940,32 @@
         document.getElementById('totalWorkoutTimer').innerText = h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
     }
     
+    // CORREZIONE: Sposta anche i dati registrati e i flag quando un esercizio viene posticipato
     function posticipaEsercizioCorrente() {
         if (currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) return alert("Questo è l'ultimo esercizio rimasto.");
-        let esPosticipato = currentWorkout.exercises.splice(currentWorkout.currentExIndex, 1)[0];
-        currentWorkout.exercises.push(esPosticipato); caricaEsercizioCorrente(); salvaStatoWorkout();
+        
+        salvaDatiEsercizioUI();
+        let idx = currentWorkout.currentExIndex;
+        let len = currentWorkout.exercises.length;
+        
+        let esPosticipato = currentWorkout.exercises.splice(idx, 1)[0];
+        currentWorkout.exercises.push(esPosticipato);
+        
+        let recPosticipato = currentWorkout.recordedData.splice(idx, 1)[0];
+        currentWorkout.recordedData.push(recPosticipato);
+        
+        if (currentWorkout.unilateralFlags) {
+            let newFlags = {};
+            let movedFlag = currentWorkout.unilateralFlags[idx];
+            for (let i = 0; i < len; i++) {
+                if (i < idx) newFlags[i] = currentWorkout.unilateralFlags[i];
+                else if (i > idx) newFlags[i - 1] = currentWorkout.unilateralFlags[i];
+            }
+            if (movedFlag !== undefined) newFlags[len - 1] = movedFlag;
+            currentWorkout.unilateralFlags = newFlags;
+        }
+
+        caricaEsercizioCorrente(); 
     }
 
     function sostituisciEsercizioCorrente() {
@@ -975,6 +984,7 @@
         document.getElementById('dataModal').classList.add('active');
     }
 
+    // CORREZIONE: Pulisce i dati vecchi dell'esercizio sostituito per caricare quelli del nuovo esercizio
     function confermaSostituzioneEx() {
         let sel = document.getElementById('selectCambiaEx');
         let valore = sel.value;
@@ -985,12 +995,14 @@
         if (nuovo && nuovo.trim() !== "") { 
             let nomeNorm = normalizzaNome(nuovo);
             currentWorkout.exercises[currentWorkout.currentExIndex] = nomeNorm; 
+            delete currentWorkout.recordedData[currentWorkout.currentExIndex];
+            if (currentWorkout.unilateralFlags) delete currentWorkout.unilateralFlags[currentWorkout.currentExIndex];
+            
             if(!userMuscleMap[nomeNorm]) { 
                 userMuscleMap[nomeNorm] = "Altro / Vari"; 
                 localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); 
             }
             caricaEsercizioCorrente(); 
-            salvaStatoWorkout(); 
             chiudiModale(); 
         }
     }
@@ -1062,7 +1074,8 @@
     }
 
     function salvaDatiEsercizioUI() {
-        let setRows = document.querySelectorAll('.set-row');
+        if (!currentWorkout || !currentWorkout.exercises || currentWorkout.exercises.length === 0) return;
+        let setRows = document.querySelectorAll('#setsContainer .set-row');
         let setsData = [];
         setRows.forEach(row => {
             let kgInput = row.querySelector('.kg-input');
@@ -1078,7 +1091,8 @@
             }
         });
         
-        let currentNotes = document.getElementById('woExerciseNotes') ? document.getElementById('woExerciseNotes').value : '';
+        let notesEl = document.getElementById('woExerciseNotes');
+        let currentNotes = notesEl ? notesEl.value : '';
 
         currentWorkout.recordedData[currentWorkout.currentExIndex] = { 
             name: currentWorkout.exercises[currentWorkout.currentExIndex], 
@@ -1095,13 +1109,15 @@
         }
     }
 
+    // CORREZIONE: Salva i dati della UI prima di cambiare il flag unilaterale e ricaricare la vista
     function toggleUnilateral() {
+        salvaDatiEsercizioUI();
         if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
         currentWorkout.unilateralFlags[currentWorkout.currentExIndex] = document.getElementById('unilateralToggle').checked;
-        salvaStatoWorkout();
         caricaEsercizioCorrente(true); 
     }
 
+    // CORREZIONE: Ripristina sempre i dati salvati in currentWorkout.recordedData[currentExIndex] quando ci si sposta avanti/indietro
     function caricaEsercizioCorrente(isRestoring = false) {
         clearInterval(timerInterval); timerEndTime = null; document.getElementById('timerDisplay').innerText = "00:00";
         let exName = currentWorkout.exercises[currentWorkout.currentExIndex];
@@ -1118,18 +1134,21 @@
         let bestAllTimeSet = null; 
         
         let activeExData = currentWorkout.recordedData[currentWorkout.currentExIndex];
-        let activeSessionSets = activeExData?.sets;
+        let activeSessionSets = (activeExData && Array.isArray(activeExData.sets)) ? activeExData.sets : null;
         let targetTextEl = document.getElementById('woTargetData'); targetTextEl.style.display = "none";
         
         for (let i = historyData.length - 1; i >= 0; i--) {
             let foundEx = historyData[i].data.find(e => normalizzaNome(e.name) === normalizzaNome(exName));
             if(foundEx) {
-                if (!pastSets) {
+                if (!pastSets && foundEx.sets && foundEx.sets.length > 0) {
                     pastSets = JSON.parse(JSON.stringify(foundEx.sets)); 
+                }
+                // Cerca l'ultima nota non vuota registrata per questo esercizio
+                if (!pastNotes && foundEx.notes && foundEx.notes.trim() !== "") {
                     pastNotes = foundEx.notes;
                 }
                 
-                let normalSets = foundEx.sets.filter(s => s.type === 'normal' || s.type === undefined);
+                let normalSets = (foundEx.sets || []).filter(s => s.type === 'normal' || s.type === undefined);
                 if (normalSets.length > 0) {
                     let bestSetLoc = normalSets.reduce((best, current) => {
                         if (!best) return current;
@@ -1207,6 +1226,7 @@
             pastNoteBox.style.display = "none";
         }
 
+        // Ripristino accurato delle note dell'esercizio corrente
         let notesTextarea = document.getElementById('woExerciseNotes');
         if (activeExData && activeExData.notes !== undefined) {
             notesTextarea.value = activeExData.notes;
@@ -1218,15 +1238,16 @@
 
         document.getElementById('setsContainer').innerHTML = "";
         
-        if (activeSessionSets && activeSessionSets.length > 0 && isRestoring) {
+        // Ripristino delle serie dell'esercizio corrente (sia in navigazione avanti/indietro sia in reload pagina)
+        if (activeSessionSets && activeSessionSets.length > 0) {
             activeSessionSets.forEach((s, idx) => {
                 let matchingPast = pastSets && pastSets[idx] ? pastSets[idx] : (pastSets && pastSets[0] ? pastSets[0] : null);
-                aggiungiSerie(s.type || 'normal', matchingPast, s.kg, s.reps, s.repsSx);
+                aggiungiSerie(s.type || 'normal', matchingPast, s.kg ?? "", s.reps ?? "", s.repsSx ?? "");
             });
         } else if (isRestoring && currentWorkout.currentScreenSets && currentWorkout.currentScreenSets.length > 0) {
             currentWorkout.currentScreenSets.forEach((s, idx) => {
                 let matchingPast = pastSets && pastSets[idx] ? pastSets[idx] : null;
-                aggiungiSerie(s.type || 'normal', matchingPast, s.kg, s.reps, s.repsSx);
+                aggiungiSerie(s.type || 'normal', matchingPast, s.kg ?? "", s.reps ?? "", s.repsSx ?? "");
             });
         } else if (pastSets && pastSets.length > 0) {
             pastSets.forEach((vecchiaSerie) => aggiungiSerie(vecchiaSerie.type || 'normal', vecchiaSerie));
@@ -1322,6 +1343,10 @@
         let isWarmup = pastSet && pastSet.type === 'warmup'; 
         let customPhClass = isWarmup ? "orange-placeholder" : "";
 
+        let safeKg = restoreKg !== undefined && restoreKg !== null ? restoreKg : "";
+        let safeReps = restoreReps !== undefined && restoreReps !== null ? restoreReps : "";
+        let safeRepsSx = restoreRepsSx !== undefined && restoreRepsSx !== null ? restoreRepsSx : "";
+
         const div = document.createElement('div'); 
         div.className = `set-row type-${tipoAtteso}`; 
         div.dataset.type = tipoAtteso;
@@ -1340,9 +1365,9 @@
             div.innerHTML = `
                 <div class="set-main">
                     <span class="set-number" style="width:25px; font-weight:bold; color: var(--text-sec); text-align:center;">${setNumStr}</span>
-                    <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${restoreKg}" oninput="controllaCompletamentoRiga(this)">
-                    <input type="number" placeholder="Dx ${phRepsDx !== 'Dx' ? phRepsDx : ''}" class="reps-input reps-input-dx ${customPhClass}" value="${restoreReps}" oninput="controllaCompletamentoRiga(this)">
-                    <input type="number" placeholder="Sx ${phRepsSx !== 'Sx' ? phRepsSx : ''}" class="reps-input reps-input-sx ${customPhClass}" value="${restoreRepsSx}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${safeKg}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" placeholder="Dx ${phRepsDx !== 'Dx' ? phRepsDx : ''}" class="reps-input reps-input-dx ${customPhClass}" value="${safeReps}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" placeholder="Sx ${phRepsSx !== 'Sx' ? phRepsSx : ''}" class="reps-input reps-input-sx ${customPhClass}" value="${safeRepsSx}" oninput="controllaCompletamentoRiga(this)">
                     <div class="set-controls">
                         ${btnWarmup}${btnDrop}
                         <button class="action-btn danger-btn" onclick="rimuoviSerie(this)">X</button>
@@ -1354,8 +1379,8 @@
             div.innerHTML = `
                 <div class="set-main">
                     <span class="set-number" style="width:25px; font-weight:bold; color: var(--text-sec); text-align:center;">${setNumStr}</span>
-                    <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${restoreKg}" oninput="controllaCompletamentoRiga(this)">
-                    <input type="number" placeholder="${tempBaseRep}" class="reps-input ${customPhClass}" value="${restoreReps}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${safeKg}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" placeholder="${tempBaseRep}" class="reps-input ${customPhClass}" value="${safeReps}" oninput="controllaCompletamentoRiga(this)">
                     <div class="set-controls">
                         ${btnWarmup}${btnDrop}
                         <button class="action-btn danger-btn" onclick="rimuoviSerie(this)">X</button>
@@ -1365,7 +1390,7 @@
             `;
         }
         
-        if (restoreKg && restoreReps && (!isUnilat || (isUnilat && restoreRepsSx))) {
+        if (safeKg !== "" && safeReps !== "" && (!isUnilat || (isUnilat && safeRepsSx !== ""))) {
             div.classList.add('completed');
             setTimeout(() => {
                 let kgInput = div.querySelector('.kg-input');
@@ -1419,25 +1444,26 @@
         
         if(currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) {
             
-            // Backup di stato globale per poter tornare indietro dopo aver salvato
             localStorage.setItem('wk_last_saved_backup', JSON.stringify(currentWorkout));
             
             clearInterval(totalTimerInterval); timerEndTime = null;
             let dateStr = new Date().toLocaleDateString('it-IT');
             
-            let finalData = currentWorkout.recordedData.filter(ex => ex && ex.sets && ex.sets.length > 0)
+            // CORREZIONE: Mantiene l'esercizio nello storico se ha serie valide OPPURE se è stata scritta una nota
+            let finalData = currentWorkout.recordedData.filter(ex => ex !== null && ex !== undefined)
                 .map(ex => {
+                    let validSets = (ex.sets || []).filter(s => s.kg !== "" && (s.reps !== "" || (s.repsSx !== undefined && s.repsSx !== ""))).map(s => ({
+                        kg: parseFloat(s.kg), 
+                        reps: parseInt(s.reps || 0), 
+                        repsSx: (s.repsSx !== undefined && s.repsSx !== "") ? parseInt(s.repsSx || 0) : undefined,
+                        type: s.type
+                    }));
                     return {
                         name: ex.name,
-                        notes: ex.notes || "",
-                        sets: ex.sets.filter(s => s.kg !== "" && (s.reps !== "" || s.repsSx !== undefined)).map(s => ({
-                            kg: parseFloat(s.kg), 
-                            reps: parseInt(s.reps || 0), 
-                            repsSx: s.repsSx !== undefined ? parseInt(s.repsSx || 0) : undefined,
-                            type: s.type
-                        }))
+                        notes: ex.notes ? ex.notes.trim() : "",
+                        sets: validSets
                     };
-                }).filter(ex => ex.sets.length > 0);
+                }).filter(ex => ex.sets.length > 0 || ex.notes !== "");
 
             if(finalData.length === 0) {
                 alert("Nessun dato valido inserito. L'allenamento non è stato salvato.");
@@ -1470,8 +1496,9 @@
 
     function annullaWorkout() {
         if(confirm("Vuoi annullare e chiudere questo allenamento? Potrai ripristinarlo in un secondo momento.")) {
+            salvaStatoWorkout();
             localStorage.setItem('wk_closed_session_backup', localStorage.getItem('wk_active_session'));
-            localStorage.removeItem('wk_last_saved_backup'); // Evita conflitti
+            localStorage.removeItem('wk_last_saved_backup');
             clearInterval(totalTimerInterval); timerEndTime = null; pulisciStatoWorkout(); switchView('view-dashboard');
         }
     }
@@ -1523,7 +1550,7 @@
                     session.data.forEach(ex => {
                         let gruppo = ottieniGruppoMuscolare(ex.name);
                         if (volumiSettimanali[gruppo] !== undefined) {
-                            let serieValide = ex.sets.filter(s => s.type !== 'warmup' && s.kg !== "").length;
+                            let serieValide = (ex.sets || []).filter(s => s.type !== 'warmup' && s.kg !== "").length;
                             volumiSettimanali[gruppo] += serieValide;
                         }
                     });
@@ -1590,7 +1617,7 @@
             let gruppo = ottieniGruppoMuscolare(ex.name);
             muscoliLavorati.add(gruppo);
             
-            ex.sets.forEach(s => {
+            (ex.sets || []).forEach(s => {
                 if (s.type !== 'warmup' && s.kg && s.reps) {
                     let tr = parseInt(s.reps || 0);
                     if(s.repsSx !== undefined) tr += parseInt(s.repsSx || 0);
@@ -1655,7 +1682,6 @@
                 </p>
             </div>
             
-            <!-- NUOVI PULSANTI CON UNDO SALVATAGGIO -->
             <button class="warning" style="margin-bottom: 10px; color: black;" onclick="tornaIndietroAlWorkout()">↩️ Torna all'Allenamento</button>
             <button class="success" onclick="chiudiModale(); switchView('view-dashboard');">Salva e Chiudi</button>
         `;
@@ -1854,6 +1880,7 @@
             }
         } else {
             aggiungiSerie('normal', null, "", repCount);
+            salvaStatoWorkout();
         }
         chiudiAiCamera();
     }
