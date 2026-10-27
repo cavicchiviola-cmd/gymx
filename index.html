@@ -73,13 +73,13 @@
         .history-text { color: var(--text-sec); font-size: 14px; margin-bottom: 15px; padding-left: 10px; border-left: 3px solid var(--primary); }
         .target-text { color: var(--warning); font-size: 14px; margin-bottom: 10px; padding-left: 10px; border-left: 3px solid var(--warning); background: rgba(255, 214, 10, 0.1); border-radius: 0 8px 8px 0; padding-top: 8px; padding-bottom: 8px; line-height: 1.4; }
         
-        .note-box { width: 100%; min-height: 60px; resize: vertical; margin-top: 10px; margin-bottom: 15px; font-size: 14px; }
-        .past-note-badge { background: #2c2c2e; border-left: 3px solid var(--text-sec); padding: 8px 12px; border-radius: 0 8px 8px 0; font-size: 13px; color: var(--text-sec); margin-bottom: 10px; }
+        .note-box { width: 100%; min-height: 65px; resize: vertical; margin-top: 6px; margin-bottom: 15px; font-size: 14px; border: 1px solid #3a3a3c; }
+        .note-saved-indicator { font-size: 11px; color: var(--success); font-weight: normal; float: right; opacity: 0; transition: opacity 0.3s; }
 
         .barbell-math { display: none; background: #2c2c2e; border: 1px solid #3a3a3c; border-radius: 8px; padding: 10px; margin-bottom: 15px; font-size: 14px; }
         .barbell-math span { color: var(--primary); font-weight: bold; }
         
-        #timerDisplay { font-size: 48px; text-align: center; font-variant-numeric: tabular-nums; margin: 20px 0; font-weight: bold; color: var(--primary); }
+        #timerDisplay { font-size: 48px; text-align: center; font-variant-numeric: tabular-nums; margin: 15px 0; font-weight: bold; color: var(--primary); }
         
         .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .progress-text { font-size: 14px; color: var(--primary); font-weight: bold; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
@@ -104,6 +104,8 @@
         select.group-select { padding: 6px; border-radius: 6px; background: #1c1c1e; color: white; border: 1px solid #3a3a3c; font-size: 12px; font-weight: bold; width: 110px; }
         .drag-handle { cursor: grab; font-size: 18px; margin-right: 10px; -webkit-user-drag: element; display: inline-block; }
         .drag-over { border: 2px dashed var(--warning) !important; background: rgba(255, 214, 10, 0.1) !important; }
+
+        .recap-ex-card { background: #2c2c2e; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 4px solid var(--primary); }
     </style>
 </head>
 <body>
@@ -210,8 +212,6 @@
             </div>
             
             <p class="target-text" id="woTargetData" style="display:none;"></p>
-            
-            <div id="pastNoteBox" class="past-note-badge" style="display:none;"></div>
 
             <div id="barbellMathContainer" class="barbell-math">
                 Setup Dischi (Bilanciere 20kg): <br>
@@ -221,19 +221,27 @@
             <div id="setsContainer"></div>
             <button class="secondary" onclick="aggiungiSerie('normal'); salvaStatoWorkout();" style="margin-top: 10px;">+ Aggiungi Serie</button>
             
+            <!-- BOX NOTE PERMANENTE E MODIFICABILE -->
             <div style="margin-top: 15px;">
-                <label style="font-size: 12px; font-weight: bold; color: var(--text-sec); display: block; margin-bottom: 4px;">📝 Note Esercizio (es. regolazione macchinario, sensazioni):</label>
-                <textarea id="woExerciseNotes" class="note-box" placeholder="Aggiungi una nota..." oninput="salvaStatoWorkout()"></textarea>
+                <label style="font-size: 12px; font-weight: bold; color: var(--text-sec); display: block; margin-bottom: 4px;">
+                    📌 Note permanenti esercizio (sempre salvate e modificabili):
+                    <span id="noteSavedBadge" class="note-saved-indicator">✓ Salvata</span>
+                </label>
+                <textarea id="woExerciseNotes" class="note-box" placeholder="Es. Altezza sella 4, panca 30°, buffer 1..." oninput="aggiornaNotaPermanente()"></textarea>
             </div>
 
             <hr style="border-color: #3a3a3c; margin: 20px 0;">
             
-            <h3 style="text-align:center;">Recupero</h3>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0;">Recupero</h3>
+                <span id="notifStatusBadge" style="font-size:11px; color:var(--text-sec); cursor:pointer;" onclick="richiediPermessoNotifiche(true)">🔔 Attiva avvisi background</span>
+            </div>
             <div id="timerDisplay">00:00</div>
             <div style="display:flex; gap:10px;">
                 <button class="secondary" onclick="avviaTimer(60)">60s</button>
                 <button class="secondary" onclick="avviaTimer(90)">90s</button>
                 <button class="secondary" onclick="avviaTimer(120)">120s</button>
+                <button class="secondary" style="width:auto; padding:14px 12px; background:#2c2c2e;" onclick="fermaTimer()" title="Ferma Timer">⏹️</button>
             </div>
         </div>
         <div style="display:flex; gap:10px;">
@@ -362,6 +370,25 @@
         }
     } catch(e) {}
 
+    // DIZIONARIO NOTE PERMANENTI PER ESERCIZIO
+    let exerciseNotesMap = {};
+    try {
+        let savedNotes = localStorage.getItem('wk_exercise_notes');
+        if (savedNotes) {
+            exerciseNotesMap = JSON.parse(savedNotes) || {};
+        } else {
+            // Migrazione automatica dallo storico pregresso: recupera l'ultima nota nota di ogni esercizio
+            historyData.forEach(sess => {
+                (sess.data || []).forEach(ex => {
+                    if (ex.notes && ex.notes.trim() !== "") {
+                        exerciseNotesMap[normalizzaNome(ex.name)] = ex.notes.trim();
+                    }
+                });
+            });
+            localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
+        }
+    } catch(e) { exerciseNotesMap = {}; }
+
     let undoStack = [];
     try {
         let savedUndo = localStorage.getItem('wk_undo_stack');
@@ -376,6 +403,7 @@
     let timerEndTime = null; 
     let editIndexRoutine = -1;
     let viewBeforeArchive = 'view-dashboard';
+    let noteSaveTimeout = null;
 
     function normalizzaNome(str) { return str.trim().toLowerCase().replace(/\b\w/g, s => s.toUpperCase()); }
     function ottieniGruppoMuscolare(nomeEsercizio) { return userMuscleMap[normalizzaNome(nomeEsercizio)] || "Altro / Vari"; }
@@ -387,6 +415,133 @@
         const r = parseInt(hex.substr(0, 2), 16), g = parseInt(hex.substr(2, 2), 16), b = parseInt(hex.substr(4, 2), 16);
         return (((r * 299) + (g * 587) + (b * 114)) / 1000) > 155;
     }
+
+    // ===============================================
+    // SISTEMA NOTIFICHE, BACKGROUND WORKER & WAKE LOCK
+    // ===============================================
+    let timerWorker = null;
+    let wakeLock = null;
+    let sharedAudioCtx = null;
+
+    function initBackgroundTimerWorker() {
+        try {
+            const blob = new Blob([`
+                let tId = null;
+                self.onmessage = function(e) {
+                    if (e.data.cmd === 'start') {
+                        clearInterval(tId);
+                        const endTime = e.data.endTime;
+                        tId = setInterval(() => {
+                            const rem = Math.ceil((endTime - Date.now()) / 1000);
+                            if (rem <= 0) {
+                                clearInterval(tId);
+                                self.postMessage({ type: 'done' });
+                            } else {
+                                self.postMessage({ type: 'tick', remain: rem });
+                            }
+                        }, 500);
+                    } else if (e.data.cmd === 'stop') {
+                        clearInterval(tId);
+                    }
+                };
+            `], { type: 'application/javascript' });
+            timerWorker = new Worker(URL.createObjectURL(blob));
+            timerWorker.onmessage = function(e) {
+                if (e.data.type === 'tick') {
+                    aggiornaTestoTimer(e.data.remain);
+                } else if (e.data.type === 'done') {
+                    completaTimerRecupero();
+                }
+            };
+        } catch(e) {
+            console.log("Web Worker non supportato, uso fallback standard.");
+        }
+    }
+
+    async function attivaWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+            } catch (err) {}
+        }
+    }
+
+    function rilasciaWakeLock() {
+        if (wakeLock !== null) {
+            wakeLock.release().catch(() => {});
+            wakeLock = null;
+        }
+    }
+
+    function aggiornaBadgeNotificheUI() {
+        const badge = document.getElementById('notifStatusBadge');
+        if (!badge) return;
+        if (!("Notification" in window)) {
+            badge.innerText = "🔕 Notifiche non supportate";
+            return;
+        }
+        if (Notification.permission === "granted") {
+            badge.innerText = "🔔 Avvisi attivi";
+            badge.style.color = "var(--success)";
+        } else if (Notification.permission === "denied") {
+            badge.innerText = "🔕 Avvisi bloccati dal browser";
+            badge.style.color = "var(--danger)";
+        } else {
+            badge.innerText = "🔔 Tocca per attivare notifiche";
+            badge.style.color = "var(--warning)";
+        }
+    }
+
+    function richiediPermessoNotifiche(mostraAlert = false) {
+        if (!("Notification" in window)) {
+            if (mostraAlert) alert("Il tuo browser non supporta le notifiche native. Su iPhone assicurati di aver aggiunto l'app alla Schermata Home.");
+            return;
+        }
+        if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+            Notification.requestPermission().then(permission => {
+                aggiornaBadgeNotificheUI();
+                if (mostraAlert && permission === "granted") {
+                    inviaNotificaSistema("Notifiche Attivate! 🔔", "Riceverai un avviso alla fine del tempo di recupero.");
+                }
+            });
+        } else if (mostraAlert && Notification.permission === "granted") {
+            inviaNotificaSistema("Notifiche già attive ✅", "Il timer ti avviserà anche se esci dall'app.");
+        } else if (mostraAlert && Notification.permission === "denied") {
+            alert("Hai bloccato le notifiche nelle impostazioni del browser/telefono. Sbloccale dalle impostazioni del sito per ricevere gli avvisi.");
+        }
+    }
+
+    function inviaNotificaSistema(titolo, corpo) {
+        if (!("Notification" in window) || Notification.permission !== "granted") return;
+        try {
+            if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+                navigator.serviceWorker.ready.then(reg => {
+                    reg.showNotification(titolo, { body: corpo, vibrate: [300, 150, 300, 150, 400], tag: 'rest-timer', renotify: true });
+                }).catch(() => {
+                    new Notification(titolo, { body: corpo });
+                });
+            } else {
+                new Notification(titolo, { body: corpo });
+            }
+        } catch(e) {}
+    }
+
+    // Quando l'utente torna sull'app o riaccende lo schermo, ricalcola istantaneamente il timer
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+            if (document.getElementById('view-workout').classList.contains('active')) {
+                attivaWakeLock();
+            }
+            if (timerEndTime) {
+                let remain = Math.ceil((timerEndTime - Date.now()) / 1000);
+                if (remain <= 0) {
+                    completaTimerRecupero();
+                } else {
+                    aggiornaTestoTimer(remain);
+                }
+            }
+        }
+    });
 
     function toggleGestioneSchede() {
         const sez = document.getElementById('sezioneGestioneSchede');
@@ -403,15 +558,37 @@
     function switchView(viewId) {
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
         document.getElementById(viewId).classList.add('active');
-        if(viewId === 'view-dashboard') renderDashboard();
-        if(viewId === 'view-history') renderCalendario();
+        if(viewId === 'view-dashboard') { rilasciaWakeLock(); renderDashboard(); }
+        if(viewId === 'view-history') { rilasciaWakeLock(); renderCalendario(); }
+        if(viewId === 'view-workout') { attivaWakeLock(); aggiornaBadgeNotificheUI(); }
     }
 
     function chiudiModale() {
         document.getElementById('dataModal').classList.remove('active');
     }
 
-    // CORREZIONE: Sincronizza sempre la UI corrente dentro currentWorkout.recordedData E salva nel localStorage
+    // GESTIONE NOTA PERMANENTE
+    function aggiornaNotaPermanente() {
+        if (!currentWorkout || !currentWorkout.exercises || currentWorkout.exercises.length === 0) return;
+        let exName = normalizzaNome(currentWorkout.exercises[currentWorkout.currentExIndex]);
+        let notesEl = document.getElementById('woExerciseNotes');
+        let val = notesEl ? notesEl.value : "";
+
+        // Salva nel dizionario permanente per questo esercizio
+        exerciseNotesMap[exName] = val;
+        localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
+
+        // Feedback visivo "Salvata"
+        let badge = document.getElementById('noteSavedBadge');
+        if (badge) {
+            badge.style.opacity = "1";
+            clearTimeout(noteSaveTimeout);
+            noteSaveTimeout = setTimeout(() => { badge.style.opacity = "0"; }, 1500);
+        }
+
+        salvaStatoWorkout();
+    }
+
     function salvaStatoWorkout() {
         if (!currentWorkout.routineName) return;
         
@@ -429,6 +606,8 @@
     function pulisciStatoWorkout() { localStorage.removeItem('wk_active_session'); }
 
     window.onload = () => {
+        initBackgroundTimerWorker();
+        aggiornaBadgeNotificheUI();
         try {
             let savedSession = localStorage.getItem('wk_active_session');
             if (savedSession) {
@@ -450,7 +629,12 @@
     };
 
     function saveStateForUndo() {
-        undoStack.push({ history: JSON.parse(JSON.stringify(historyData)), routines: JSON.parse(JSON.stringify(routines)), map: JSON.parse(JSON.stringify(userMuscleMap)) });
+        undoStack.push({ 
+            history: JSON.parse(JSON.stringify(historyData)), 
+            routines: JSON.parse(JSON.stringify(routines)), 
+            map: JSON.parse(JSON.stringify(userMuscleMap)),
+            notes: JSON.parse(JSON.stringify(exerciseNotesMap))
+        });
         if(undoStack.length > 5) undoStack.shift(); 
         localStorage.setItem('wk_undo_stack', JSON.stringify(undoStack));
         document.getElementById('btnUndo').style.display = "block";
@@ -460,6 +644,10 @@
         if(undoStack.length === 0) return;
         let lastState = undoStack.pop();
         historyData = lastState.history; routines = lastState.routines; userMuscleMap = lastState.map;
+        if (lastState.notes) {
+            exerciseNotesMap = lastState.notes;
+            localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
+        }
         localStorage.setItem('wk_history', JSON.stringify(historyData)); localStorage.setItem('wk_routines', JSON.stringify(routines));
         localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); localStorage.setItem('wk_undo_stack', JSON.stringify(undoStack));
         renderArchivio();
@@ -541,6 +729,14 @@
         routines.forEach(r => r.exercises.forEach((ex, i, arr) => { if(normalizzaNome(ex) === oldNorm) arr[i] = newNorm; }));
         if(oldGrp && !userMuscleMap[newNorm]) userMuscleMap[newNorm] = oldGrp;
         delete userMuscleMap[oldNorm];
+
+        // Trasferisce anche la nota permanente
+        if (exerciseNotesMap[oldNorm]) {
+            if (!exerciseNotesMap[newNorm]) exerciseNotesMap[newNorm] = exerciseNotesMap[oldNorm];
+            delete exerciseNotesMap[oldNorm];
+            localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
+        }
+
         localStorage.setItem('wk_history', JSON.stringify(historyData)); localStorage.setItem('wk_routines', JSON.stringify(routines)); localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); renderArchivio();
     }
 
@@ -550,6 +746,8 @@
             routines.forEach(r => { r.exercises = r.exercises.filter(e => normalizzaNome(e) !== norm); });
             historyData.forEach(s => { s.data = s.data.filter(e => normalizzaNome(e.name) !== norm); });
             historyData = historyData.filter(s => s.data.length > 0); delete userMuscleMap[norm];
+            delete exerciseNotesMap[norm];
+            localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
             localStorage.setItem('wk_history', JSON.stringify(historyData)); localStorage.setItem('wk_routines', JSON.stringify(routines)); localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); renderArchivio();
         }
     }
@@ -560,19 +758,23 @@
         let bodyHtml = "";
         let logs = [];
         
+        if (exerciseNotesMap[normEx] && exerciseNotesMap[normEx].trim() !== "") {
+            bodyHtml += `<div style="background:#2c2c2e; border-left:3px solid var(--primary); padding:10px 12px; border-radius:0 8px 8px 0; margin-bottom:15px; font-size:13px;"><b>📌 Nota attuale:</b> ${exerciseNotesMap[normEx]}</div>`;
+        }
+
         historyData.forEach(sess => {
             let found = sess.data.find(e => normalizzaNome(e.name) === normEx);
             if(found) logs.push({ date: sess.date, routine: sess.routine, sets: found.sets, notes: found.notes });
         });
         
         if(logs.length === 0) {
-            bodyHtml = "<p>Nessun dato registrato.</p>";
+            bodyHtml += "<p>Nessun dato registrato.</p>";
         } else {
             if (gruppo !== "Cardio" && logs.length > 1) {
                 let trendData = logs.map(log => {
                     let volume = 0;
                     let best1RM = 0;
-                    log.sets.forEach(s => {
+                    (log.sets || []).forEach(s => {
                         if (s.kg && s.reps && s.type !== 'warmup') {
                             let k = parseFloat(s.kg);
                             let rEff = parseInt(s.reps || 0);
@@ -940,7 +1142,6 @@
         document.getElementById('totalWorkoutTimer').innerText = h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
     }
     
-    // CORREZIONE: Sposta anche i dati registrati e i flag quando un esercizio viene posticipato
     function posticipaEsercizioCorrente() {
         if (currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) return alert("Questo è l'ultimo esercizio rimasto.");
         
@@ -984,7 +1185,6 @@
         document.getElementById('dataModal').classList.add('active');
     }
 
-    // CORREZIONE: Pulisce i dati vecchi dell'esercizio sostituito per caricare quelli del nuovo esercizio
     function confermaSostituzioneEx() {
         let sel = document.getElementById('selectCambiaEx');
         let valore = sel.value;
@@ -1093,6 +1293,11 @@
         
         let notesEl = document.getElementById('woExerciseNotes');
         let currentNotes = notesEl ? notesEl.value : '';
+        let exNameNorm = normalizzaNome(currentWorkout.exercises[currentWorkout.currentExIndex]);
+
+        // Sincronizza anche nella mappa permanente delle note
+        exerciseNotesMap[exNameNorm] = currentNotes;
+        localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
 
         currentWorkout.recordedData[currentWorkout.currentExIndex] = { 
             name: currentWorkout.exercises[currentWorkout.currentExIndex], 
@@ -1109,7 +1314,6 @@
         }
     }
 
-    // CORREZIONE: Salva i dati della UI prima di cambiare il flag unilaterale e ricaricare la vista
     function toggleUnilateral() {
         salvaDatiEsercizioUI();
         if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
@@ -1117,10 +1321,10 @@
         caricaEsercizioCorrente(true); 
     }
 
-    // CORREZIONE: Ripristina sempre i dati salvati in currentWorkout.recordedData[currentExIndex] quando ci si sposta avanti/indietro
     function caricaEsercizioCorrente(isRestoring = false) {
-        clearInterval(timerInterval); timerEndTime = null; document.getElementById('timerDisplay').innerText = "00:00";
+        fermaTimer();
         let exName = currentWorkout.exercises[currentWorkout.currentExIndex];
+        let normExName = normalizzaNome(exName);
         let gruppoMusc = ottieniGruppoMuscolare(exName);
         document.getElementById('woRoutineName').innerText = currentWorkout.routineName;
         document.getElementById('woProgress').innerText = `Esercizio ${currentWorkout.currentExIndex + 1} di ${currentWorkout.exercises.length}`;
@@ -1130,7 +1334,7 @@
         document.getElementById('unilateralToggle').checked = !!isUnilat;
 
         let pastSets = null;
-        let pastNotes = null;
+        let lastHistoricalNote = null;
         let bestAllTimeSet = null; 
         
         let activeExData = currentWorkout.recordedData[currentWorkout.currentExIndex];
@@ -1138,14 +1342,13 @@
         let targetTextEl = document.getElementById('woTargetData'); targetTextEl.style.display = "none";
         
         for (let i = historyData.length - 1; i >= 0; i--) {
-            let foundEx = historyData[i].data.find(e => normalizzaNome(e.name) === normalizzaNome(exName));
+            let foundEx = historyData[i].data.find(e => normalizzaNome(e.name) === normExName);
             if(foundEx) {
                 if (!pastSets && foundEx.sets && foundEx.sets.length > 0) {
                     pastSets = JSON.parse(JSON.stringify(foundEx.sets)); 
                 }
-                // Cerca l'ultima nota non vuota registrata per questo esercizio
-                if (!pastNotes && foundEx.notes && foundEx.notes.trim() !== "") {
-                    pastNotes = foundEx.notes;
+                if (!lastHistoricalNote && foundEx.notes && foundEx.notes.trim() !== "") {
+                    lastHistoricalNote = foundEx.notes.trim();
                 }
                 
                 let normalSets = (foundEx.sets || []).filter(s => s.type === 'normal' || s.type === undefined);
@@ -1217,28 +1420,23 @@
                 return s;
             });
         }
-        
-        let pastNoteBox = document.getElementById('pastNoteBox');
-        if (pastNotes && pastNotes.trim() !== '') {
-            pastNoteBox.innerHTML = `<b>📌 Nota precedente:</b> ${pastNotes}`;
-            pastNoteBox.style.display = "block";
-        } else {
-            pastNoteBox.style.display = "none";
-        }
 
-        // Ripristino accurato delle note dell'esercizio corrente
+        // CARICAMENTO NOTA PERMANENTE DIRETTAMENTE NEL TEXTAREA MODIFICABILE
         let notesTextarea = document.getElementById('woExerciseNotes');
         if (activeExData && activeExData.notes !== undefined) {
             notesTextarea.value = activeExData.notes;
-        } else if (isRestoring && currentWorkout.currentScreenNotes !== undefined) {
-            notesTextarea.value = currentWorkout.currentScreenNotes;
+        } else if (exerciseNotesMap[normExName] !== undefined) {
+            notesTextarea.value = exerciseNotesMap[normExName];
+        } else if (lastHistoricalNote !== null) {
+            notesTextarea.value = lastHistoricalNote;
+            exerciseNotesMap[normExName] = lastHistoricalNote;
+            localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
         } else {
             notesTextarea.value = "";
         }
 
         document.getElementById('setsContainer').innerHTML = "";
         
-        // Ripristino delle serie dell'esercizio corrente (sia in navigazione avanti/indietro sia in reload pagina)
         if (activeSessionSets && activeSessionSets.length > 0) {
             activeSessionSets.forEach((s, idx) => {
                 let matchingPast = pastSets && pastSets[idx] ? pastSets[idx] : (pastSets && pastSets[0] ? pastSets[0] : null);
@@ -1414,29 +1612,87 @@
 
     function rimuoviSerie(btnElement) { btnElement.closest('.set-row').remove(); aggiornaNumerazioneSerie(); aggiornaBarbellMath(); salvaStatoWorkout(); }
 
+    // ===============================================
+    // LOGICA TIMER CON SUPPORTO BACKGROUND & NOTIFICA
+    // ===============================================
     function playAudioAlert() {
         try {
-            let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            let oscillator = audioCtx.createOscillator(); oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); oscillator.connect(audioCtx.destination);
-            oscillator.start(); oscillator.stop(audioCtx.currentTime + 0.5); 
+            if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+            
+            // Doppio beep ben udibile
+            [0, 0.25, 0.5].forEach(delay => {
+                let osc = sharedAudioCtx.createOscillator();
+                let gain = sharedAudioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, sharedAudioCtx.currentTime + delay);
+                gain.gain.setValueAtTime(0.8, sharedAudioCtx.currentTime + delay);
+                gain.gain.exponentialRampToValueAtTime(0.01, sharedAudioCtx.currentTime + delay + 0.18);
+                osc.connect(gain);
+                gain.connect(sharedAudioCtx.destination);
+                osc.start(sharedAudioCtx.currentTime + delay);
+                osc.stop(sharedAudioCtx.currentTime + delay + 0.2);
+            });
         } catch(e) { console.log("Audio non supportato."); }
     }
 
+    function aggiornaTestoTimer(sec) {
+        let m = Math.floor(sec / 60).toString().padStart(2, '0');
+        let s = (sec % 60).toString().padStart(2, '0');
+        document.getElementById('timerDisplay').innerText = `${m}:${s}`;
+    }
+
+    function completaTimerRecupero() {
+        if (!timerEndTime) return; // Evita doppie esecuzioni
+        fermaTimer();
+        let disp = document.getElementById('timerDisplay');
+        disp.innerText = "VIA! 💪";
+        disp.style.color = "var(--success)";
+        setTimeout(() => { if(!timerEndTime) { disp.innerText = "00:00"; disp.style.color = "var(--primary)"; } }, 3500);
+
+        if(navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 400]);
+        playAudioAlert();
+
+        let exCorrente = currentWorkout.exercises[currentWorkout.currentExIndex] || "Esercizio";
+        inviaNotificaSistema("⏱️ Recupero Terminato!", `È il momento della prossima serie di ${exCorrente}!`);
+    }
+
+    function fermaTimer() {
+        clearInterval(timerInterval);
+        if (timerWorker) timerWorker.postMessage({ cmd: 'stop' });
+        timerEndTime = null;
+        let disp = document.getElementById('timerDisplay');
+        disp.innerText = "00:00";
+        disp.style.color = "var(--primary)";
+    }
+
     function avviaTimer(secondi) {
+        // Sblocca il contesto audio al tocco dell'utente e richiede il permesso notifiche
+        try {
+            if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+        } catch(e) {}
+        
+        richiediPermessoNotifiche(false);
+        attivaWakeLock();
+
         clearInterval(timerInterval);
         timerEndTime = Date.now() + (secondi * 1000);
-        let formatTime = (sec) => `${Math.floor(sec / 60).toString().padStart(2, '0')}:${(sec % 60).toString().padStart(2, '0')}`;
-        document.getElementById('timerDisplay').innerText = formatTime(secondi);
-        
-        timerInterval = setInterval(() => {
-            let remain = Math.ceil((timerEndTime - Date.now()) / 1000);
-            if(remain <= 0) {
-                clearInterval(timerInterval); document.getElementById('timerDisplay').innerText = "00:00"; timerEndTime = null;
-                if(navigator.vibrate) navigator.vibrate([300, 150, 300]);
-                playAudioAlert();
-            } else { document.getElementById('timerDisplay').innerText = formatTime(remain); }
-        }, 1000);
+        document.getElementById('timerDisplay').style.color = "var(--primary)";
+        aggiornaTestoTimer(secondi);
+
+        if (timerWorker) {
+            timerWorker.postMessage({ cmd: 'start', endTime: timerEndTime });
+        } else {
+            timerInterval = setInterval(() => {
+                let remain = Math.ceil((timerEndTime - Date.now()) / 1000);
+                if(remain <= 0) {
+                    completaTimerRecupero();
+                } else {
+                    aggiornaTestoTimer(remain);
+                }
+            }, 500);
+        }
     }
 
     function prossimoEsercizio() {
@@ -1446,10 +1702,10 @@
             
             localStorage.setItem('wk_last_saved_backup', JSON.stringify(currentWorkout));
             
-            clearInterval(totalTimerInterval); timerEndTime = null;
+            clearInterval(totalTimerInterval); fermaTimer(); rilasciaWakeLock();
             let dateStr = new Date().toLocaleDateString('it-IT');
             
-            // CORREZIONE: Mantiene l'esercizio nello storico se ha serie valide OPPURE se è stata scritta una nota
+            // Prepara i dati per il salvataggio: salva gli esercizi con serie compilate
             let finalData = currentWorkout.recordedData.filter(ex => ex !== null && ex !== undefined)
                 .map(ex => {
                     let validSets = (ex.sets || []).filter(s => s.kg !== "" && (s.reps !== "" || (s.repsSx !== undefined && s.repsSx !== ""))).map(s => ({
@@ -1458,15 +1714,17 @@
                         repsSx: (s.repsSx !== undefined && s.repsSx !== "") ? parseInt(s.repsSx || 0) : undefined,
                         type: s.type
                     }));
+                    let normName = normalizzaNome(ex.name);
+                    let permanentNote = exerciseNotesMap[normName] !== undefined ? exerciseNotesMap[normName].trim() : (ex.notes ? ex.notes.trim() : "");
                     return {
                         name: ex.name,
-                        notes: ex.notes ? ex.notes.trim() : "",
+                        notes: permanentNote,
                         sets: validSets
                     };
-                }).filter(ex => ex.sets.length > 0 || ex.notes !== "");
+                }).filter(ex => ex.sets.length > 0);
 
             if(finalData.length === 0) {
-                alert("Nessun dato valido inserito. L'allenamento non è stato salvato.");
+                alert("Nessuna serie valida inserita. Le note degli esercizi sono comunque rimaste salvate!");
                 pulisciStatoWorkout(); switchView('view-dashboard');
                 return;
             }
@@ -1499,12 +1757,12 @@
             salvaStatoWorkout();
             localStorage.setItem('wk_closed_session_backup', localStorage.getItem('wk_active_session'));
             localStorage.removeItem('wk_last_saved_backup');
-            clearInterval(totalTimerInterval); timerEndTime = null; pulisciStatoWorkout(); switchView('view-dashboard');
+            clearInterval(totalTimerInterval); fermaTimer(); pulisciStatoWorkout(); switchView('view-dashboard');
         }
     }
 
     function esportaBackup() {
-        const dataStr = JSON.stringify({ routines: routines, history: historyData, map: userMuscleMap }, null, 2);
+        const dataStr = JSON.stringify({ routines: routines, history: historyData, map: userMuscleMap, notes: exerciseNotesMap }, null, 2);
         const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob);
         const a = document.createElement("a"); a.href = url; a.download = `backup_allenamento_${new Date().toLocaleDateString('it-IT').replace(/\//g, '-')}.json`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
@@ -1518,6 +1776,7 @@
                 if (importato.routines && importato.history) {
                     routines = importato.routines; historyData = importato.history;
                     if (importato.map) { userMuscleMap = importato.map; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); }
+                    if (importato.notes) { exerciseNotesMap = importato.notes; localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap)); }
                     localStorage.setItem('wk_routines', JSON.stringify(routines)); localStorage.setItem('wk_history', JSON.stringify(historyData));
                     renderDashboard(); alert("Dati importati!");
                 }
@@ -1526,7 +1785,7 @@
     }
 
     // ===============================================
-    // LOGICA AI MIX E AI COACH
+    // LOGICA AI MIX, AI COACH E RECAP ESERCIZI FATTI
     // ===============================================
 
     function generaMixAI() {
@@ -1612,20 +1871,44 @@
         let feedbackOrdine = "";
         let commentoAllenamento = "";
         let muscoliLavorati = new Set();
+        let recapEserciziHtml = "";
         
         workoutData.forEach((ex, index) => {
             let gruppo = ottieniGruppoMuscolare(ex.name);
+            let coloreGruppo = ottieniColoreHEX(gruppo);
             muscoliLavorati.add(gruppo);
             
-            (ex.sets || []).forEach(s => {
+            let volEx = 0;
+            let listSetsHtml = (ex.sets || []).map((s, idx) => {
+                let tr = parseInt(s.reps || 0);
+                if(s.repsSx !== undefined) tr += parseInt(s.repsSx || 0);
+                
                 if (s.type !== 'warmup' && s.kg && s.reps) {
-                    let tr = parseInt(s.reps || 0);
-                    if(s.repsSx !== undefined) tr += parseInt(s.repsSx || 0);
-                    tonnellaggioTotale += (parseFloat(s.kg) * tr);
+                    let v = parseFloat(s.kg) * tr;
+                    tonnellaggioTotale += v;
+                    volEx += v;
                     repsTotalNumber += tr;
                     serieTotali++;
                 }
-            });
+
+                let prefs = s.type === 'warmup' ? 'W' : (s.type === 'drop' ? '↳D' : `S${idx+1}`);
+                let tagColor = s.type === 'warmup' ? 'var(--warmup)' : (s.type === 'drop' ? 'var(--drop)' : 'var(--text)');
+                let repStr = s.repsSx !== undefined ? `${s.reps}/${s.repsSx}` : s.reps;
+                return `<span style="color:${tagColor}; display:inline-block; margin-right:10px; font-size:13px;"><b>${prefs}:</b> ${repStr} × ${s.kg}kg</span>`;
+            }).join('');
+
+            let notaExHtml = ex.notes ? `<div style="font-size:12px; color:var(--text-sec); margin-top:6px; font-style:italic;">📌 ${ex.notes}</div>` : '';
+
+            recapEserciziHtml += `
+                <div class="recap-ex-card" style="border-left-color: ${coloreGruppo};">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <b style="font-size:15px; color:white;">${index + 1}. ${ex.name}</b>
+                        <span style="font-size:12px; color:var(--warning); font-weight:bold;">${volEx.toFixed(0)} kg</span>
+                    </div>
+                    <div style="line-height:1.5;">${listSetsHtml}</div>
+                    ${notaExHtml}
+                </div>
+            `;
 
             if (index > 0) {
                 let exPrecedente = workoutData[index - 1].name.toLowerCase();
@@ -1655,13 +1938,13 @@
         let htmlReport = `
             <div style="text-align: center; margin-bottom: 20px;">
                 <h2 style="margin:0; color: var(--success);">Ottimo Lavoro! 🎉</h2>
-                <p style="color: var(--text-sec); font-size: 14px;">Tempo effettivo: ${document.getElementById('totalWorkoutTimer').innerText}</p>
+                <p style="color: var(--text-sec); font-size: 14px; margin: 4px 0 0 0;">${currentWorkout.routineName} • Tempo: ${document.getElementById('totalWorkoutTimer').innerText}</p>
             </div>
             
             <div style="background: #2c2c2e; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #3a3a3c;">
                 <h4 style="margin: 0 0 10px 0; color: var(--primary);">📊 Statistiche Sessione</h4>
                 <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #3a3a3c; padding-bottom: 8px; margin-bottom: 8px;">
-                    <span>Volume Load:</span> <b style="color: var(--warning);">${tonnellaggioTotale.toFixed(1)} kg</b>
+                    <span>Volume Load Totale:</span> <b style="color: var(--warning);">${tonnellaggioTotale.toFixed(1)} kg</b>
                 </div>
                 <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #3a3a3c; padding-bottom: 8px; margin-bottom: 8px;">
                     <span>Serie Allenanti:</span> <b>${serieTotali}</b>
@@ -1671,7 +1954,13 @@
                 </div>
             </div>
 
-            <div style="background: rgba(10, 132, 255, 0.1); border-left: 4px solid var(--primary); padding: 15px; border-radius: 0 12px 12px 0; margin-bottom: 15px;">
+            <!-- SEZIONE RECAP ESERCIZI SVOLTI -->
+            <div style="margin-bottom: 15px;">
+                <h4 style="margin: 0 0 10px 0; color: var(--text); font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">📋 Recap Esercizi Svolti (${workoutData.length})</h4>
+                ${recapEserciziHtml}
+            </div>
+
+            <div style="background: rgba(10, 132, 255, 0.1); border-left: 4px solid var(--primary); padding: 15px; border-radius: 0 12px 12px 0; margin-bottom: 20px;">
                 <h4 style="margin: 0 0 8px 0; color: var(--primary);">🧠 AI Coach Feedback</h4>
                 <p style="margin: 0 0 10px 0; font-size: 13px; line-height: 1.4;">
                     Muscoli colpiti: <b>${Array.from(muscoliLavorati).join(', ')}</b>.<br><br>
@@ -1682,7 +1971,7 @@
                 </p>
             </div>
             
-            <button class="warning" style="margin-bottom: 10px; color: black;" onclick="tornaIndietroAlWorkout()">↩️ Torna all'Allenamento</button>
+            <button class="warning" style="margin-bottom: 10px; color: black;" onclick="tornaIndietroAlWorkout()">↩️ Torna all'Allenamento (Modifica)</button>
             <button class="success" onclick="chiudiModale(); switchView('view-dashboard');">Salva e Chiudi</button>
         `;
 
