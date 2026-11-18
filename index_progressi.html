@@ -1,0 +1,2394 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Workout Tracker PWA</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- TensorFlow.js e Pose Detection (MoveNet) per AI Tracker -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+
+    <style>
+        :root { 
+            --primary: #0a84ff; 
+            --bg: #000000; 
+            --card: #1c1c1e; 
+            --text: #ffffff; 
+            --text-sec: #ebebf599; 
+            --danger: #ff453a; 
+            --success: #30d158; 
+            --warning: #ffd60a; 
+            --warmup: #ff9f0a; 
+            --drop: #bf5af2; 
+            --cardio: #34c759;
+            --suggest-color: #64d2ff;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; padding-top: 50px; }
+        h1, h2, h3, h4 { margin-top: 0; }
+        .view { display: none; }
+        .view.active { display: block; animation: fadeIn 0.2s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .card { background: var(--card); padding: 20px; border-radius: 14px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.8); position: relative; }
+        button { background: var(--primary); color: white; border: none; padding: 14px; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; width: 100%; margin-bottom: 10px; transition: transform 0.1s; }
+        button:active { transform: scale(0.97); filter: brightness(0.9); }
+        button.secondary { background: #3a3a3c; }
+        button.danger { background: var(--danger); }
+        button.warning { background: var(--warning); color: black; }
+        button.icon-btn { width: 36px; height: 36px; padding: 0; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 0; background: #3a3a3c; }
+        
+        .btn-start-huge { background: var(--success); color: black; font-weight: 900; font-size: 20px; padding: 25px; box-shadow: 0 4px 20px rgba(48, 209, 88, 0.3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 30px; border-radius: 16px; }
+        
+        input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 8px; background: #2c2c2e; color: white; font-size: 16px; box-sizing: border-box; transition: all 0.2s; outline: none; font-family: inherit; }
+        input[type="color"] { background: none; border: none; width: 40px; height: 40px; padding: 0; border-radius: 50%; cursor: pointer; margin-right: 10px; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 2px solid #3a3a3c; border-radius: 50%; }
+        
+        input::placeholder, textarea::placeholder { color: #636366; }
+        input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); background: #3a3a3c; }
+        
+        .orange-placeholder::placeholder { color: var(--warmup) !important; opacity: 1; font-weight: bold; }
+        
+        .set-row { display: flex; flex-direction: column; margin-bottom: 12px; border-left: 3px solid transparent; transition: all 0.3s ease; padding-left: 6px; }
+        .set-row.type-normal.completed { border-left-color: var(--success); background-color: rgba(48, 209, 88, 0.05); border-radius: 0 8px 8px 0; padding-top: 4px; padding-bottom: 4px; }
+        .set-row.type-warmup.completed { border-left-color: var(--warmup); background-color: rgba(255, 159, 10, 0.05); border-radius: 0 8px 8px 0; padding-top: 4px; padding-bottom: 4px; }
+        .set-row.type-drop { margin-left: 20px; border-left-color: var(--drop); opacity: 0.9; }
+        .set-row.type-drop.completed { background-color: rgba(191, 90, 242, 0.05); border-radius: 0 8px 8px 0; padding-top: 4px; padding-bottom: 4px; }
+        
+        .set-main { display: flex; gap: 6px; align-items: center; width: 100%; }
+        .set-row input { margin-bottom: 0; flex: 1; min-width: 40px; text-align: center; } 
+        .set-controls { display: flex; gap: 4px; }
+        .action-btn { background: #3a3a3c; color: white; border: none; border-radius: 6px; width: 34px; height: 34px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; padding: 0; margin: 0; font-size: 12px; }
+        .action-btn.active-w { background: var(--warmup); }
+        .action-btn.danger-btn { background: var(--danger); }
+        
+        .set-feedback { font-size: 12px; margin-top: 6px; width: 100%; padding-left: 33px; font-weight: 600; color: var(--suggest-color); line-height: 1.3; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase; margin-left: 8px; letter-spacing: 0.5px; vertical-align: middle; }
+        
+        .history-text { color: var(--text-sec); font-size: 14px; margin-bottom: 15px; padding-left: 10px; border-left: 3px solid var(--primary); }
+        .target-text { color: var(--warning); font-size: 14px; margin-bottom: 10px; padding-left: 10px; border-left: 3px solid var(--warning); background: rgba(255, 214, 10, 0.1); border-radius: 0 8px 8px 0; padding-top: 8px; padding-bottom: 8px; line-height: 1.4; }
+        
+        .note-box { width: 100%; min-height: 65px; resize: vertical; margin-top: 6px; margin-bottom: 15px; font-size: 14px; border: 1px solid #3a3a3c; }
+        .note-saved-indicator { font-size: 11px; color: var(--success); font-weight: normal; float: right; opacity: 0; transition: opacity 0.3s; }
+
+        .barbell-math { display: none; background: #2c2c2e; border: 1px solid #3a3a3c; border-radius: 8px; padding: 10px; margin-bottom: 15px; font-size: 14px; }
+        .barbell-math span { color: var(--primary); font-weight: bold; }
+        
+        #timerDisplay { font-size: 48px; text-align: center; font-variant-numeric: tabular-nums; margin: 15px 0; font-weight: bold; color: var(--primary); }
+        
+        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .progress-text { font-size: 14px; color: var(--primary); font-weight: bold; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        .total-timer { font-family: monospace; font-size: 20px; font-weight: bold; color: var(--primary); background: #1c1c1e; padding: 6px 12px; border-radius: 8px; border: 1px solid #3a3a3c; }
+        
+        .muscle-group-title { margin-top: 25px; margin-bottom: 10px; font-size: 18px; color: var(--primary); border-bottom: 1px solid #3a3a3c; padding-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        .edit-row { display: flex; justify-content: space-between; align-items: center; background: #2c2c2e; padding: 10px; border-radius: 8px; margin-bottom: 8px; transition: opacity 0.3s; }
+
+        .cal-header { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 12px; color: var(--text-sec); font-weight: bold; margin-bottom: 10px; }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+        .cal-day { background: #2c2c2e; border-radius: 6px; min-height: 45px; padding: 4px; display: flex; flex-direction: column; align-items: center; }
+        .cal-day-num { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+        .cal-dots { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; margin-top: auto; padding-bottom: 4px; }
+        .cal-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .cal-empty { background: transparent; }
+        
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;}
+        .modal.active { display: flex; animation: fadeIn 0.2s; }
+        .modal-content { background: var(--card); padding: 20px; border-radius: 14px; width: 100%; max-height: 85vh; overflow-y: auto; }
+        .close-modal { float: right; font-size: 28px; cursor: pointer; color: var(--text-sec); font-weight: bold; line-height: 1; margin-left: 15px;}
+        
+        select.group-select { padding: 6px; border-radius: 6px; background: #1c1c1e; color: white; border: 1px solid #3a3a3c; font-size: 12px; font-weight: bold; width: 110px; }
+        .drag-handle { cursor: grab; font-size: 18px; margin-right: 10px; -webkit-user-drag: element; display: inline-block; }
+        .drag-over { border: 2px dashed var(--warning) !important; background: rgba(255, 214, 10, 0.1) !important; }
+
+        .recap-ex-card { background: #2c2c2e; border-radius: 10px; padding: 12px; margin-bottom: 10px; border-left: 4px solid var(--primary); }
+    
+        /* ANALISI PROGRESSIONI */
+        .progress-page-intro { color: var(--text-sec); font-size: 13px; line-height: 1.5; margin: -8px 0 16px; }
+        .progress-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+        .progress-stat { background: #2c2c2e; border: 1px solid #3a3a3c; border-radius: 12px; padding: 13px; min-width: 0; }
+        .progress-stat-label { display:block; font-size:11px; color:var(--text-sec); text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
+        .progress-stat-value { display:block; font-size:22px; line-height:1.2; font-weight:800; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+        .progress-stat-sub { display:block; color:var(--text-sec); font-size:11px; margin-top:4px; }
+        .progress-chart-card { background:#2c2c2e; border:1px solid #3a3a3c; padding:14px; border-radius:12px; margin-bottom:12px; overflow:hidden; }
+        .progress-chart-card h3 { font-size:14px; margin:0 0 10px; }
+        .progress-chart-svg { display:block; width:100%; height:auto; overflow:visible; }
+        .progress-config { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; align-items:end; }
+        .progress-config label { font-size:11px; color:var(--text-sec); display:block; }
+        .progress-config input { margin:5px 0 0; padding:10px 7px; font-size:14px; }
+        .progress-history-row { display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center; padding:10px 0; border-bottom:1px solid #3a3a3c; font-size:12px; }
+        .progress-history-row:last-child { border-bottom:0; }
+        .progress-positive { color:var(--success); }
+        .progress-negative { color:var(--danger); }
+        .progress-neutral { color:var(--warning); }
+        .progress-recommendation { border:1px solid var(--primary); background:rgba(10,132,255,.09); border-radius:12px; padding:15px; margin-bottom:14px; line-height:1.45; }
+        .progress-recommendation strong { color:var(--primary); }
+        .progress-target-row { display:flex; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid #3a3a3c; font-size:13px; }
+        .progress-target-row:last-child { border-bottom:0; }
+        .progress-note { font-size:11px; color:var(--text-sec); line-height:1.5; }
+        .progress-select { margin:0 0 14px; }
+        @media (min-width: 600px) { .progress-stat-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+
+    </style>
+</head>
+<body>
+
+    <!-- DASHBOARD -->
+    <div id="view-dashboard" class="view active">
+        <div class="header-flex">
+            <h1>Dashboard</h1>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+                <button class="secondary" style="width: auto; padding: 8px 9px; font-size:12px;" onclick="switchView('view-history')">Storico</button>
+                <button class="secondary" style="width: auto; padding: 8px 10px; font-size:12px;" onclick="apriProgressi()">📈 Progressi</button>
+                <button class="secondary icon-btn" style="width: auto; padding: 8px 10px; font-size: 12px;" onclick="apriArchivio('view-dashboard')">🗂️ Archivio</button>
+            </div>
+        </div>
+
+        <button class="btn-start-huge" onclick="apriSelezioneScheda()">▶ INIZIA ALLENAMENTO</button>
+
+        <div id="undoContainer"></div>
+
+        <button class="secondary" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-radius: 12px; margin-bottom: 10px; background: #2c2c2e; border: 1px solid #3a3a3c;" onclick="toggleGestioneSchede()">
+            <span style="font-weight: bold; color: white;">⚙️ Gestione Schede</span>
+            <span id="toggleSchedeIcon" style="font-size: 14px; color: var(--text-sec);">▼ Apri</span>
+        </button>
+        
+        <div id="sezioneGestioneSchede" style="display: none; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 12px; margin-top: 5px;">
+                <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 12px; margin: 0; background: #3a3a3c;" onclick="creaNuovaScheda()">+ Nuova</button>
+            </div>
+            <div id="routinesContainer"></div>
+        </div>
+
+        <hr style="border-color: #3a3a3c; margin: 25px 0 15px 0;">
+        <h3 style="font-size: 16px; color: var(--text-sec);">Backup Dati</h3>
+        <div style="display: flex; gap: 10px;">
+            <button class="secondary" style="font-size: 14px;" onclick="esportaBackup()">💾 Esporta</button>
+            <button class="secondary" style="font-size: 14px;" onclick="document.getElementById('importFile').click()">📂 Importa</button>
+            <input type="file" id="importFile" style="display:none" accept=".json" onchange="importaBackup(event)">
+        </div>
+    </div>
+
+    <!-- ANALISI PROGRESSIONI -->
+    <div id="view-progress" class="view">
+        <div class="header-flex">
+            <h2 style="margin:0;">Progressi</h2>
+            <button class="secondary" style="width:auto; padding:8px 15px;" onclick="chiudiProgressi()">Indietro</button>
+        </div>
+        <p class="progress-page-intro">Analisi dei carichi e delle ripetizioni registrate. Le stime aiutano a leggere il trend, ma non sostituiscono una valutazione della tecnica, del recupero o della crescita muscolare.</p>
+        <select id="progressExerciseSelect" class="progress-select" onchange="renderProgressi(this.value)"></select>
+        <div id="progressContent"></div>
+    </div>
+
+    <!-- ARCHIVIO ESERCIZI -->
+    <div id="view-archive" class="view">
+        <div class="header-flex" style="margin-bottom: 10px;">
+            <h2>Archivio Dati</h2>
+            <button class="secondary" style="width: auto; padding: 8px 15px;" onclick="chiudiArchivio()">Chiudi</button>
+        </div>
+        
+        <button id="btnUndo" class="warning" style="display:none; font-size: 14px; padding: 10px;" onclick="undoLastAction()">↩️ Annulla Ultima Azione</button>
+        
+        <p style="font-size:13px; color:var(--text-sec); margin-bottom: 20px;">
+            • Clicca 📊 per vedere le statistiche di crescita, i pesi e il <b>Volume Load</b>.<br>
+            • Clicca ✏️ per rinominare il testo.<br>
+            • Trascina il pallino 🟣 sopra un altro esercizio per unirli.<br>
+        </p>
+        
+        <div id="archiveContainer"></div>
+    </div>
+
+    <!-- EDITOR SCHEDA CON SELETTORE A TENDINA -->
+    <div id="view-edit-routine" class="view">
+        <div class="header-flex">
+            <h2 id="editRoutineName" style="margin-bottom: 0;">Modifica Scheda</h2>
+            <button class="success" style="width: auto; padding: 8px 15px; margin-bottom: 0; background: var(--success);" onclick="salvaModificheScheda()">Salva</button>
+        </div>
+        
+        <div class="card" style="display: flex; align-items: center; padding: 15px;">
+            <input type="color" id="editRoutineColor" onchange="aggiornaColoreScheda(this.value)">
+            <div>
+                <h4 style="margin:0; font-size: 16px;">Colore Identificativo</h4>
+                <p style="margin:0; font-size: 12px; color: var(--text-sec);">Verrà usato per il pallino nel calendario.</p>
+            </div>
+        </div>
+
+        <div class="card" id="editExercisesContainer"></div>
+    </div>
+
+    <!-- WORKOUT ATTIVO -->
+    <div id="view-workout" class="view">
+        <div class="header-flex" style="margin-bottom: 15px;">
+            <h2 id="woRoutineName" style="margin: 0; font-size: 20px; max-width: 55%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Nome Scheda</h2>
+            <div style="display:flex; gap: 8px; align-items:center;">
+                <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 14px; margin: 0; border-radius: 8px;" onclick="apriArchivio('view-workout')" title="Consulta Archivio senza perdere i dati in corso">🗂️ Dati</button>
+                <div id="totalWorkoutTimer" class="total-timer">00:00</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="header-flex" style="margin-bottom: 5px;">
+                <div id="woProgress" class="progress-text" style="margin:0;">Esercizio 1 di X</div>
+                <div style="display:flex; gap: 5px;">
+                    <label style="font-size: 11px; background: #2c2c2e; padding: 4px 8px; border-radius: 6px; border: 1px solid #3a3a3c; display:flex; align-items:center; gap:5px; color: var(--text-sec); cursor:pointer;">
+                        <input type="checkbox" id="unilateralToggle" onchange="toggleUnilateral()"> 🦵 Gamba Singola
+                    </label>
+                    <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 12px; margin: 0;" onclick="posticipaEsercizioCorrente()">Posticipa 🔄</button>
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 id="woExerciseName" style="margin: 0; display: flex; align-items: center; flex-wrap: wrap;">Nome Esercizio</h3>
+                <div style="display: flex; gap: 5px;">
+                    <button class="secondary" style="width: auto; padding: 4px 8px; font-size: 12px; margin: 0; background: var(--drop); color: white; border: 1px solid #bf5af2;" onclick="apriMenuSelezioneAi()">🤖 AI Tracker</button>
+                    <button class="secondary" style="width: auto; padding: 4px 8px; font-size: 12px; margin: 0;" onclick="sostituisciEsercizioCorrente()" title="Sostituisci esercizio corrente">✏️ Cambia</button>
+                    <button class="secondary" style="width: auto; padding: 4px 8px; font-size: 12px; margin: 0;" onclick="aggiungiEsercizioInCoda()" title="Aggiungi esercizio extra">➕ Add Es.</button>
+                </div>
+            </div>
+            
+            <div class="target-text" id="woTargetData" style="display:none;"></div>
+
+            <div id="barbellMathContainer" class="barbell-math">
+                Setup Dischi (Bilanciere 20kg): <br>
+                <span id="barbellMathResult">Inserisci i kg per calcolare...</span>
+            </div>
+            
+            <div id="setsContainer"></div>
+            <button class="secondary" onclick="aggiungiSerie('normal'); salvaStatoWorkout();" style="margin-top: 10px;">+ Aggiungi Serie</button>
+            
+            <!-- BOX NOTE PERMANENTE E MODIFICABILE -->
+            <div style="margin-top: 15px;">
+                <label style="font-size: 12px; font-weight: bold; color: var(--text-sec); display: block; margin-bottom: 4px;">
+                    📌 Note permanenti esercizio (sempre salvate e modificabili):
+                    <span id="noteSavedBadge" class="note-saved-indicator">✓ Salvata</span>
+                </label>
+                <textarea id="woExerciseNotes" class="note-box" placeholder="Es. Altezza sella 4, panca 30°, buffer 1..." oninput="aggiornaNotaPermanente()"></textarea>
+            </div>
+
+            <hr style="border-color: #3a3a3c; margin: 20px 0;">
+            
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0;">Recupero</h3>
+                <span id="notifStatusBadge" style="font-size:11px; color:var(--text-sec); cursor:pointer;" onclick="richiediPermessoNotifiche(true)">🔔 Attiva avvisi background</span>
+            </div>
+            <div id="timerDisplay">00:00</div>
+            <div style="display:flex; gap:10px;">
+                <button class="secondary" onclick="avviaTimer(60)">60s</button>
+                <button class="secondary" onclick="avviaTimer(90)">90s</button>
+                <button class="secondary" onclick="avviaTimer(120)">120s</button>
+                <button class="secondary" style="width:auto; padding:14px 12px; background:#2c2c2e;" onclick="fermaTimer()" title="Ferma Timer">⏹️</button>
+            </div>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button class="danger" onclick="annullaWorkout()">Annulla</button>
+            <button id="btnPrevExercise" class="secondary" onclick="precedenteEsercizio()" style="display:none; flex: 0.5;">⬅️ Indietro</button>
+            <button id="btnNextExercise" onclick="prossimoEsercizio()" style="flex: 1;">Esercizio Succ. ➔</button>
+        </div>
+    </div>
+
+    <!-- STORICO E CALENDARIO -->
+    <div id="view-history" class="view">
+        <div class="header-flex">
+            <h2>Calendario Storico</h2>
+            <button class="secondary" style="width: auto; padding: 8px 15px;" onclick="switchView('view-dashboard')">Indietro</button>
+        </div>
+
+        <div class="card" style="margin-bottom: 25px; padding-bottom: 15px;">
+            <div class="header-flex" style="margin-bottom: 15px;">
+                <h3 style="font-size: 16px; margin: 0;" id="calMonthTitle">Mese Corrente</h3>
+                <button class="secondary" style="width: auto; padding: 6px 12px; font-size: 12px; margin: 0; background: var(--cardio); color: black; font-weight: bold;" onclick="loggaCardioOggi()">+ Cardio</button>
+            </div>
+            <div class="cal-header">
+                <div>L</div><div>M</div><div>M</div><div>G</div><div>V</div><div>S</div><div>D</div>
+            </div>
+            <div class="cal-grid" id="calendarGrid"></div>
+        </div>
+        
+        <p style="text-align: center; color: var(--text-sec); font-size: 14px;">I dati dettagliati dei pesi sollevati e il Volume Load sono consultabili nella sezione 🗂️ Archivio.</p>
+    </div>
+
+    <!-- MODALE DETTAGLI E SELEZIONE SCHEDA -->
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="chiudiModale()">&times;</span>
+            <h3 id="modalTitle" style="margin-bottom: 15px; color: var(--primary);">Dettagli</h3>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- MODALE SELEZIONE AI TRACKER -->
+    <div id="aiSetupModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="document.getElementById('aiSetupModal').classList.remove('active')">&times;</span>
+            <h3 style="color: var(--drop); margin-bottom: 15px;">🤖 Configura AI Tracker</h3>
+            <p style="font-size: 14px; color: var(--text-sec); margin-bottom: 15px; line-height: 1.4;">Seleziona il tipo di movimento che stai per eseguire.</p>
+            <select id="aiExerciseTypeSelect" style="width: 100%; margin-bottom: 25px; background: #2c2c2e; padding: 15px; border-radius: 10px; color: white; border: none; font-size: 14px;">
+                <option value="rdl">🦵 Stacchi / RDL / Squat (Anca e Ginocchio)</option>
+                <option value="pullup">💪 Trazioni / Lat Machine (Gomito in Trazione)</option>
+                <option value="pushup">✋ Panca / Spinte (Gomito in Spinta)</option>
+            </select>
+            <button style="background: var(--drop); color: white;" onclick="avviaAiCamera()">Accendi Fotocamera ➔</button>
+        </div>
+    </div>
+
+    <!-- MODALE FOTOCAMERA AI -->
+    <div id="aiModal" class="modal" style="flex-direction: column;">
+        <div style="width: 100%; max-width: 400px; background: var(--bg); border-radius: 16px; overflow: hidden; position: relative;">
+            <div class="header-flex" style="padding: 15px; background: var(--card); margin: 0;">
+                <h3 style="margin: 0; color: var(--primary);">AI Rep Counter</h3>
+                <span style="font-size: 24px; cursor: pointer; color: var(--text-sec);" onclick="chiudiAiCamera()">&times;</span>
+            </div>
+            
+            <div style="position: relative; width: 100%; aspect-ratio: 3/4; background: black;">
+                <video id="aiVideo" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;" playsinline autoplay muted></video>
+                <canvas id="aiCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;"></canvas>
+                
+                <div style="position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); border-radius: 12px; padding: 15px; text-align: center; z-index: 20; border: 2px solid var(--primary);">
+                    <span style="font-size: 12px; color: var(--text-sec); display: block; text-transform: uppercase;">Reps</span>
+                    <span id="aiRepCount" style="font-size: 40px; font-weight: 900; color: white;">0</span>
+                </div>
+                
+                <div id="aiStateBadge" style="position: absolute; top: 20px; left: 20px; background: var(--warning); color: black; font-weight: bold; padding: 5px 10px; border-radius: 8px; font-size: 12px; z-index: 20;">
+                    In attesa...
+                </div>
+            </div>
+            <button style="border-radius: 0; padding: 15px; background: var(--success); color: black; width: 100%; border: none; font-size: 16px; font-weight: bold; cursor: pointer;" onclick="trasferisciReps()">Applica Reps alla Serie</button>
+        </div>
+    </div>
+
+<script>
+    window.onerror = function(msg, url, lineNo, columnNo, error) {
+        console.error("Errore PWA: ", msg, "Riga: ", lineNo);
+        return false; 
+    };
+
+    const ST_GROUPS = [
+        { name: "Glutei", hex: "#bf5af2" }, { name: "Quadricipiti", hex: "#0a84ff" },
+        { name: "Femorali", hex: "#ff9f0a" }, { name: "Pettorali", hex: "#ff453a" },
+        { name: "Dorso", hex: "#32ade6" }, { name: "Spalle", hex: "#ffd60a" },
+        { name: "Bicipiti", hex: "#30d158" }, { name: "Tricipiti", hex: "#ff375f" },
+        { name: "Polpacci", hex: "#a2845e" }, { name: "Addome", hex: "#64d2ff" },
+        { name: "Cardio", hex: "#34c759" }
+    ];
+
+    let defaultMuscleMap = {
+        "Hip Thrust": "Glutei", "Bulgarian Split Squat": "Glutei",
+        "Leg Extension": "Quadricipiti", "Leg Curl": "Femorali", "Squat": "Quadricipiti",
+        "Stacchi Rdl": "Femorali", "Pressa": "Quadricipiti", "Panca Piana": "Pettorali",
+        "Trazioni": "Dorso", "Rematore": "Dorso", "Lento Avanti": "Spalle",
+        "Corsa": "Cardio"
+    };
+    
+    let userMuscleMap = defaultMuscleMap;
+    try {
+        let savedMap = localStorage.getItem('wk_muscle_map');
+        if(savedMap) userMuscleMap = JSON.parse(savedMap) || defaultMuscleMap;
+    } catch(e) {}
+
+    let defaultRoutines = [{ id: 1, name: "Lower Body / Glutei", color: "#bf5af2", exercises: ["Hip Thrust", "Bulgarian Split Squat", "Leg Extension", "Leg Curl"] }];
+    let routines = defaultRoutines;
+    try {
+        let savedRoutines = localStorage.getItem('wk_routines');
+        if (savedRoutines) {
+            let parsed = JSON.parse(savedRoutines);
+            if (Array.isArray(parsed)) routines = parsed;
+        }
+        routines.forEach(r => { if(!r.color) r.color = "#0a84ff"; });
+    } catch(e) { routines = defaultRoutines; }
+
+    let historyData = [];
+    try {
+        let savedHistory = localStorage.getItem('wk_history');
+        if (savedHistory) {
+            let parsed = JSON.parse(savedHistory);
+            if (Array.isArray(parsed)) historyData = parsed;
+        }
+    } catch(e) {}
+
+    // DIZIONARIO NOTE PERMANENTI PER ESERCIZIO
+    let exerciseNotesMap = {};
+    try {
+        let savedNotes = localStorage.getItem('wk_exercise_notes');
+        if (savedNotes) {
+            exerciseNotesMap = JSON.parse(savedNotes) || {};
+        } else {
+            // Migrazione automatica dallo storico pregresso: recupera l'ultima nota nota di ogni esercizio
+            historyData.forEach(sess => {
+                (sess.data || []).forEach(ex => {
+                    if (ex.notes && ex.notes.trim() !== "") {
+                        exerciseNotesMap[normalizzaNome(ex.name)] = ex.notes.trim();
+                    }
+                });
+            });
+            localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
+        }
+    } catch(e) { exerciseNotesMap = {}; }
+
+    // Impostazioni di doppia progressione, indipendenti per ogni esercizio.
+    let progressionSettings = {};
+    try {
+        const savedProgression = localStorage.getItem('wk_progression_settings');
+        if (savedProgression) progressionSettings = JSON.parse(savedProgression) || {};
+    } catch (e) { progressionSettings = {}; }
+
+    let undoStack = [];
+    try {
+        let savedUndo = localStorage.getItem('wk_undo_stack');
+        if (savedUndo) {
+            let parsed = JSON.parse(savedUndo);
+            if (Array.isArray(parsed)) undoStack = parsed;
+        }
+    } catch(e) {}
+
+    let currentWorkout = { routineName: "", routineColor: "", exercises: [], currentExIndex: 0, recordedData: [], isDeload: false, unilateralFlags: {} };
+    let timerInterval, totalTimerInterval, workoutStartTime;
+    let timerEndTime = null; 
+    let editIndexRoutine = -1;
+    let viewBeforeArchive = 'view-dashboard';
+    let noteSaveTimeout = null;
+
+    function normalizzaNome(str) { return str.trim().toLowerCase().replace(/\b\w/g, s => s.toUpperCase()); }
+    function ottieniGruppoMuscolare(nomeEsercizio) { return userMuscleMap[normalizzaNome(nomeEsercizio)] || "Altro / Vari"; }
+    function ottieniColoreHEX(gruppo) { let found = ST_GROUPS.find(g => g.name === gruppo); return found ? found.hex : "#8e8e93"; }
+    function generaStileBadge(gruppo) { let bg = ottieniColoreHEX(gruppo); return `background: ${bg}22; color: ${bg}; border: 1px solid ${bg}55;`; }
+    function isLightColor(color) {
+        if(!color) return false;
+        const hex = color.replace('#', '');
+        const r = parseInt(hex.substr(0, 2), 16), g = parseInt(hex.substr(2, 2), 16), b = parseInt(hex.substr(4, 2), 16);
+        return (((r * 299) + (g * 587) + (b * 114)) / 1000) > 155;
+    }
+
+    // ===============================================
+    // SISTEMA NOTIFICHE, BACKGROUND WORKER & WAKE LOCK
+    // ===============================================
+    let timerWorker = null;
+    let wakeLock = null;
+    let sharedAudioCtx = null;
+
+    function initBackgroundTimerWorker() {
+        try {
+            const blob = new Blob([`
+                let tId = null;
+                self.onmessage = function(e) {
+                    if (e.data.cmd === 'start') {
+                        clearInterval(tId);
+                        const endTime = e.data.endTime;
+                        tId = setInterval(() => {
+                            const rem = Math.ceil((endTime - Date.now()) / 1000);
+                            if (rem <= 0) {
+                                clearInterval(tId);
+                                self.postMessage({ type: 'done' });
+                            } else {
+                                self.postMessage({ type: 'tick', remain: rem });
+                            }
+                        }, 500);
+                    } else if (e.data.cmd === 'stop') {
+                        clearInterval(tId);
+                    }
+                };
+            `], { type: 'application/javascript' });
+            timerWorker = new Worker(URL.createObjectURL(blob));
+            timerWorker.onmessage = function(e) {
+                if (e.data.type === 'tick') {
+                    aggiornaTestoTimer(e.data.remain);
+                } else if (e.data.type === 'done') {
+                    completaTimerRecupero();
+                }
+            };
+        } catch(e) {
+            console.log("Web Worker non supportato, uso fallback standard.");
+        }
+    }
+
+    async function attivaWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+            } catch (err) {}
+        }
+    }
+
+    function rilasciaWakeLock() {
+        if (wakeLock !== null) {
+            wakeLock.release().catch(() => {});
+            wakeLock = null;
+        }
+    }
+
+    function aggiornaBadgeNotificheUI() {
+        const badge = document.getElementById('notifStatusBadge');
+        if (!badge) return;
+        if (!("Notification" in window)) {
+            badge.innerText = "🔕 Notifiche non supportate";
+            return;
+        }
+        if (Notification.permission === "granted") {
+            badge.innerText = "🔔 Avvisi attivi";
+            badge.style.color = "var(--success)";
+        } else if (Notification.permission === "denied") {
+            badge.innerText = "🔕 Avvisi bloccati dal browser";
+            badge.style.color = "var(--danger)";
+        } else {
+            badge.innerText = "🔔 Tocca per attivare notifiche";
+            badge.style.color = "var(--warning)";
+        }
+    }
+
+    function richiediPermessoNotifiche(mostraAlert = false) {
+        if (!("Notification" in window)) {
+            if (mostraAlert) alert("Il tuo browser non supporta le notifiche native. Su iPhone assicurati di aver aggiunto l'app alla Schermata Home.");
+            return;
+        }
+        if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+            Notification.requestPermission().then(permission => {
+                aggiornaBadgeNotificheUI();
+                if (mostraAlert && permission === "granted") {
+                    inviaNotificaSistema("Notifiche Attivate! 🔔", "Riceverai un avviso alla fine del tempo di recupero.");
+                }
+            });
+        } else if (mostraAlert && Notification.permission === "granted") {
+            inviaNotificaSistema("Notifiche già attive ✅", "Il timer ti avviserà anche se esci dall'app.");
+        } else if (mostraAlert && Notification.permission === "denied") {
+            alert("Hai bloccato le notifiche nelle impostazioni del browser/telefono. Sbloccale dalle impostazioni del sito per ricevere gli avvisi.");
+        }
+    }
+
+    function inviaNotificaSistema(titolo, corpo) {
+        if (!("Notification" in window) || Notification.permission !== "granted") return;
+        try {
+            if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+                navigator.serviceWorker.ready.then(reg => {
+                    reg.showNotification(titolo, { body: corpo, vibrate: [300, 150, 300, 150, 400], tag: 'rest-timer', renotify: true });
+                }).catch(() => {
+                    new Notification(titolo, { body: corpo });
+                });
+            } else {
+                new Notification(titolo, { body: corpo });
+            }
+        } catch(e) {}
+    }
+
+    // Quando l'utente torna sull'app o riaccende lo schermo, ricalcola istantaneamente il timer
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+            if (document.getElementById('view-workout').classList.contains('active')) {
+                attivaWakeLock();
+            }
+            if (timerEndTime) {
+                let remain = Math.ceil((timerEndTime - Date.now()) / 1000);
+                if (remain <= 0) {
+                    completaTimerRecupero();
+                } else {
+                    aggiornaTestoTimer(remain);
+                }
+            }
+        }
+    });
+
+    function toggleGestioneSchede() {
+        const sez = document.getElementById('sezioneGestioneSchede');
+        const icon = document.getElementById('toggleSchedeIcon');
+        if (sez.style.display === 'none') {
+            sez.style.display = 'block';
+            icon.innerText = '▲ Chiudi';
+        } else {
+            sez.style.display = 'none';
+            icon.innerText = '▼ Apri';
+        }
+    }
+
+    function switchView(viewId) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById(viewId).classList.add('active');
+        if(viewId === 'view-dashboard') { rilasciaWakeLock(); renderDashboard(); }
+        if(viewId === 'view-history') { rilasciaWakeLock(); renderCalendario(); }
+        if(viewId === 'view-progress') { rilasciaWakeLock(); renderProgressi(); }
+        if(viewId === 'view-workout') { attivaWakeLock(); aggiornaBadgeNotificheUI(); }
+    }
+
+    function chiudiModale() {
+        document.getElementById('dataModal').classList.remove('active');
+    }
+
+    // GESTIONE NOTA PERMANENTE
+    function aggiornaNotaPermanente() {
+        if (!currentWorkout || !currentWorkout.exercises || currentWorkout.exercises.length === 0) return;
+        let exName = normalizzaNome(currentWorkout.exercises[currentWorkout.currentExIndex]);
+        let notesEl = document.getElementById('woExerciseNotes');
+        let val = notesEl ? notesEl.value : "";
+
+        // Salva nel dizionario permanente per questo esercizio
+        exerciseNotesMap[exName] = val;
+        localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
+
+        // Feedback visivo "Salvata"
+        let badge = document.getElementById('noteSavedBadge');
+        if (badge) {
+            badge.style.opacity = "1";
+            clearTimeout(noteSaveTimeout);
+            noteSaveTimeout = setTimeout(() => { badge.style.opacity = "0"; }, 1500);
+        }
+
+        salvaStatoWorkout();
+    }
+
+    function salvaStatoWorkout() {
+        if (!currentWorkout.routineName) return;
+        
+        salvaDatiEsercizioUI(); 
+        
+        let currentExObj = currentWorkout.recordedData[currentWorkout.currentExIndex];
+        let stateToSave = JSON.parse(JSON.stringify(currentWorkout));
+        stateToSave.currentScreenSets = currentExObj ? currentExObj.sets : [];
+        stateToSave.currentScreenNotes = currentExObj ? currentExObj.notes : '';
+        stateToSave.workoutStartTime = workoutStartTime;
+        
+        localStorage.setItem('wk_active_session', JSON.stringify(stateToSave));
+    }
+
+    function pulisciStatoWorkout() { localStorage.removeItem('wk_active_session'); }
+
+    window.onload = () => {
+        initBackgroundTimerWorker();
+        aggiornaBadgeNotificheUI();
+        try {
+            let savedSession = localStorage.getItem('wk_active_session');
+            if (savedSession) {
+                if (confirm("Hai un allenamento in sospeso non salvato. Vuoi riprenderlo?")) {
+                    let state = JSON.parse(savedSession);
+                    currentWorkout = state;
+                    if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
+                    if(!currentWorkout.recordedData) currentWorkout.recordedData = [];
+                    workoutStartTime = state.workoutStartTime || Date.now();
+                    clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
+                    switchView('view-workout'); caricaEsercizioCorrente(true);
+                } else { pulisciStatoWorkout(); }
+            }
+            renderDashboard();
+        } catch(e) {
+            console.error("Errore onload:", e);
+            renderDashboard();
+        }
+    };
+
+    function saveStateForUndo() {
+        undoStack.push({ 
+            history: JSON.parse(JSON.stringify(historyData)), 
+            routines: JSON.parse(JSON.stringify(routines)), 
+            map: JSON.parse(JSON.stringify(userMuscleMap)),
+            notes: JSON.parse(JSON.stringify(exerciseNotesMap))
+        });
+        if(undoStack.length > 5) undoStack.shift(); 
+        localStorage.setItem('wk_undo_stack', JSON.stringify(undoStack));
+        document.getElementById('btnUndo').style.display = "block";
+    }
+
+    function undoLastAction() {
+        if(undoStack.length === 0) return;
+        let lastState = undoStack.pop();
+        historyData = lastState.history; routines = lastState.routines; userMuscleMap = lastState.map;
+        if (lastState.notes) {
+            exerciseNotesMap = lastState.notes;
+            localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
+        }
+        localStorage.setItem('wk_history', JSON.stringify(historyData)); localStorage.setItem('wk_routines', JSON.stringify(routines));
+        localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); localStorage.setItem('wk_undo_stack', JSON.stringify(undoStack));
+        renderArchivio();
+        if(undoStack.length === 0) document.getElementById('btnUndo').style.display = "none";
+        alert("Azione annullata. Dati ripristinati.");
+    }
+
+    function ottieniListaEserciziUnici() {
+        let catalogo = new Set();
+        historyData.forEach(s => s.data.forEach(ex => catalogo.add(normalizzaNome(ex.name))));
+        routines.forEach(r => r.exercises.forEach(ex => catalogo.add(normalizzaNome(ex))));
+        Object.keys(userMuscleMap).forEach(ex => catalogo.add(normalizzaNome(ex)));
+        return Array.from(catalogo).sort();
+    }
+
+    function apriArchivio(fromView = 'view-dashboard') {
+        if (fromView === 'view-workout') {
+            salvaStatoWorkout();
+        }
+        viewBeforeArchive = fromView;
+        switchView('view-archive');
+        if(undoStack.length > 0) document.getElementById('btnUndo').style.display = "block";
+        renderArchivio();
+    }
+
+    function chiudiArchivio() {
+        switchView(viewBeforeArchive);
+    }
+
+    function renderArchivio() {
+        let arr = ottieniListaEserciziUnici();
+        let grouped = {}; ST_GROUPS.forEach(g => grouped[g.name] = []); grouped["Altro / Vari"] = [];
+
+        arr.forEach(ex => { let grp = userMuscleMap[ex] || "Altro / Vari"; if(!grouped[grp]) grouped[grp] = []; grouped[grp].push(ex); });
+
+        let html = "";
+        for (let [grpName, exList] of Object.entries(grouped)) {
+            if (exList.length === 0) continue; 
+            let hex = ottieniColoreHEX(grpName);
+            html += `<h3 class="muscle-group-title" style="color: ${hex};">${grpName}</h3>`;
+            
+            exList.forEach(ex => {
+                let isUnassigned = (grpName === "Altro / Vari");
+                let rowStyle = isUnassigned ? "opacity: 0.5;" : "opacity: 1;";
+                let options = ST_GROUPS.map(g => `<option value="${g.name}" ${g.name === grpName ? 'selected' : ''}>${g.name}</option>`).join('');
+                
+                html += `
+                    <div class="edit-row" style="${rowStyle}" draggable="true" ondragstart="dragStart(event, '${ex}')" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropMerge(event, '${ex}')">
+                        <div style="display:flex; align-items:center; flex:1; overflow:hidden;">
+                            <span class="drag-handle" title="Trascina su un altro per unirli">🟣</span>
+                            <span style="font-weight:600; font-size:15px; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${ex}">${ex}</span>
+                        </div>
+                        <div style="display:flex; gap: 5px; align-items:center;">
+                            <button class="icon-btn" style="width:30px; height:30px; font-size:14px;" onclick="apriStoricoEsercizio('${ex}')" title="Vedi Storico">📊</button>
+                            <button class="icon-btn" style="width:30px; height:30px; font-size:14px;" onclick="rinominaEsercizio('${ex}')" title="Rinomina">✏️</button>
+                            <select class="group-select" onchange="impostaGruppo('${ex}', this.value)" title="Cambia Gruppo"><option value="Altro / Vari">Seleziona...</option>${options}</select>
+                            <button class="icon-btn danger" style="width:30px; height:30px; font-size:14px;" onclick="eliminaEsercizioDefinitivo('${ex}')" title="Elimina Ovunque">🗑️</button>
+                        </div>
+                    </div>`;
+            });
+        }
+        document.getElementById('archiveContainer').innerHTML = html;
+    }
+
+    function impostaGruppo(nomeEx, nuovoGruppo) { userMuscleMap[nomeEx] = nuovoGruppo; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); renderArchivio(); }
+    function rinominaEsercizio(oldName) { let nuovo = prompt(`Rinomina "${oldName}":`, oldName); if(nuovo && nuovo.trim() !== "" && normalizzaNome(nuovo) !== normalizzaNome(oldName)) eseguiUnione(oldName, nuovo); }
+    function dragStart(e, exName) { e.dataTransfer.setData("text/plain", exName); e.dataTransfer.effectAllowed = "move"; }
+    function dragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+    function dragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+    function dropMerge(e, targetExName) {
+        e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+        let sourceExName = e.dataTransfer.getData("text/plain");
+        if(sourceExName && sourceExName !== targetExName) { if(confirm(`VUOI UNIRE "${sourceExName}" IN "${targetExName}"?`)) eseguiUnione(sourceExName, targetExName); }
+    }
+    
+    function eseguiUnione(oldN, newN) {
+        saveStateForUndo(); let oldNorm = normalizzaNome(oldN); let newNorm = normalizzaNome(newN); let oldGrp = userMuscleMap[oldNorm];
+        historyData.forEach(s => s.data.forEach(ex => { if(normalizzaNome(ex.name) === oldNorm) ex.name = newNorm; }));
+        routines.forEach(r => r.exercises.forEach((ex, i, arr) => { if(normalizzaNome(ex) === oldNorm) arr[i] = newNorm; }));
+        if(oldGrp && !userMuscleMap[newNorm]) userMuscleMap[newNorm] = oldGrp;
+        delete userMuscleMap[oldNorm];
+
+        // Trasferisce anche la nota permanente
+        if (exerciseNotesMap[oldNorm]) {
+            if (!exerciseNotesMap[newNorm]) exerciseNotesMap[newNorm] = exerciseNotesMap[oldNorm];
+            delete exerciseNotesMap[oldNorm];
+            localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
+        }
+
+        localStorage.setItem('wk_history', JSON.stringify(historyData)); localStorage.setItem('wk_routines', JSON.stringify(routines)); localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); renderArchivio();
+    }
+
+    function eliminaEsercizioDefinitivo(exName) {
+        if(confirm(`ELIMINAZIONE GLOBALE\n\nCancellare "${exName}" da tutte le schede e storico?`)) {
+            saveStateForUndo(); let norm = normalizzaNome(exName);
+            routines.forEach(r => { r.exercises = r.exercises.filter(e => normalizzaNome(e) !== norm); });
+            historyData.forEach(s => { s.data = s.data.filter(e => normalizzaNome(e.name) !== norm); });
+            historyData = historyData.filter(s => s.data.length > 0); delete userMuscleMap[norm];
+            delete exerciseNotesMap[norm];
+            localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
+            localStorage.setItem('wk_history', JSON.stringify(historyData)); localStorage.setItem('wk_routines', JSON.stringify(routines)); localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); renderArchivio();
+        }
+    }
+
+    function apriStoricoEsercizio(exName) {
+        let normEx = normalizzaNome(exName);
+        let gruppo = ottieniGruppoMuscolare(normEx);
+        let bodyHtml = "";
+        let logs = [];
+        
+        if (exerciseNotesMap[normEx] && exerciseNotesMap[normEx].trim() !== "") {
+            bodyHtml += `<div style="background:#2c2c2e; border-left:3px solid var(--primary); padding:10px 12px; border-radius:0 8px 8px 0; margin-bottom:15px; font-size:13px;"><b>📌 Nota attuale:</b> ${exerciseNotesMap[normEx]}</div>`;
+        }
+
+        historyData.forEach(sess => {
+            let found = sess.data.find(e => normalizzaNome(e.name) === normEx);
+            if(found) logs.push({ date: sess.date, routine: sess.routine, sets: found.sets, notes: found.notes });
+        });
+        
+        if(logs.length === 0) {
+            bodyHtml += "<p>Nessun dato registrato.</p>";
+        } else {
+            if (gruppo !== "Cardio" && logs.length > 1) {
+                let trendData = logs.map(log => {
+                    let volume = 0;
+                    let best1RM = 0;
+                    (log.sets || []).forEach(s => {
+                        if (s.kg && s.reps && s.type !== 'warmup') {
+                            let k = parseFloat(s.kg);
+                            let rEff = parseInt(s.reps || 0);
+                            let rTot = rEff;
+                            if (s.repsSx !== undefined) {
+                                let rSx = parseInt(s.repsSx || 0);
+                                rTot = rEff + rSx; 
+                                rEff = Math.max(rEff, rSx); 
+                            }
+                            
+                            volume += (k * rTot);
+                            
+                            let repMaxLimit = rEff > 30 ? 30 : rEff;
+                            let current1RM = k / (1.0278 - (0.0278 * repMaxLimit)); 
+                            if (current1RM > best1RM) best1RM = current1RM;
+                        }
+                    });
+                    return { date: log.date, volume: volume, oneRM: best1RM };
+                }).filter(d => d.volume > 0);
+
+                if (trendData.length > 1) {
+                    let primo = trendData[0];
+                    let ultimo = trendData[trendData.length - 1];
+                    
+                    let delta1RM = ultimo.oneRM - primo.oneRM;
+                    let perc1RM = (delta1RM / primo.oneRM) * 100;
+                    let deltaVol = ultimo.volume - primo.volume;
+                    let percVol = primo.volume > 0 ? ((deltaVol / primo.volume) * 100) : 0;
+                    
+                    let colore1RM = delta1RM >= 0 ? "var(--success)" : "var(--danger)";
+                    let segno1RM = delta1RM >= 0 ? "+" : "";
+                    let coloreVol = deltaVol >= 0 ? "var(--success)" : "var(--warning)";
+                    let segnoVol = deltaVol >= 0 ? "+" : "";
+
+                    bodyHtml += `
+                        <div style="background: rgba(10, 132, 255, 0.08); border: 1px solid var(--primary); padding: 15px; border-radius: 12px; margin-bottom: 20px; box-shadow: inset 0 0 10px rgba(10,132,255,0.05);">
+                            <h4 style="margin: 0 0 12px 0; color: var(--primary); font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center;">
+                                📈 Trend di Crescita Globale
+                            </h4>
+                            <div style="display: flex; justify-content: space-between; font-size: 13px; line-height: 1.5;">
+                                <div style="flex: 1; border-right: 1px solid #3a3a3c; padding-right: 10px;">
+                                    <span style="color: var(--text-sec); display: block; font-size: 11px; text-transform: uppercase;">1RM Stimato</span>
+                                    <b style="font-size: 14px;">Da ${primo.oneRM.toFixed(1)}kg a ${ultimo.oneRM.toFixed(1)}kg</b><br>
+                                    <span style="color: ${colore1RM}; font-weight: 800; font-size: 14px;">${segno1RM}${perc1RM.toFixed(1)}%</span>
+                                </div>
+                                <div style="flex: 1; text-align: right; padding-left: 10px;">
+                                    <span style="color: var(--text-sec); display: block; font-size: 11px; text-transform: uppercase;">Volume Load</span>
+                                    <b style="font-size: 14px;">Da ${primo.volume}kg a ${ultimo.volume}kg</b><br>
+                                    <span style="color: ${coloreVol}; font-weight: 800; font-size: 14px;">${segnoVol}${percVol.toFixed(1)}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            logs.reverse().forEach(log => {
+                let volumeTotale = 0;
+                let stringaSerie = (log.sets && log.sets.length > 0) ? log.sets.map((s, i) => {
+                    if (gruppo === "Cardio") {
+                        let kmStr = parseFloat(s.kg) > 0 ? ` | ${s.kg} km` : '';
+                        return `${s.reps} min${kmStr}`;
+                    } else {
+                        let prefs = s.type === 'warmup' ? 'W' : (s.type === 'drop' ? '↳D' : `S${i+1}`);
+                        let colorStr = s.type === 'warmup' ? 'color:var(--warmup);' : (s.type === 'drop' ? 'color:var(--drop);' : 'color:var(--text);');
+                        
+                        let strRepOut = s.repsSx !== undefined ? `${s.reps}/${s.repsSx}` : s.reps;
+                        if (s.kg && s.reps) {
+                             let tr = parseInt(s.reps || 0);
+                             if(s.repsSx !== undefined) tr += parseInt(s.repsSx || 0);
+                             volumeTotale += (parseFloat(s.kg) * tr);
+                        }
+                        
+                        return `<span style="${colorStr} margin-right:8px; display:inline-block;">• ${prefs}: ${strRepOut}x${s.kg}kg</span>`;
+                    }
+                }).join('<br>') : '<span style="color:var(--text-sec); font-size:13px;">Nessuna serie registrata</span>';
+                
+                let noteHtml = log.notes ? `<div style="margin-top:6px; font-size:12px; color:var(--text-sec); font-style:italic;">📝 ${log.notes}</div>` : '';
+                let volumeHtml = (gruppo !== "Cardio" && volumeTotale > 0) ? `<div style="margin-top: 6px; font-size: 13px; color: var(--warning);">Volume Load: <b>${volumeTotale} kg</b></div>` : '';
+                
+                bodyHtml += `
+                    <div style="background: #2c2c2e; padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+                        <div style="font-size: 12px; color: var(--text-sec); margin-bottom: 5px;">${log.date} - ${log.routine}</div>
+                        <div style="font-size: 15px; font-weight: bold; line-height: 1.4;">${stringaSerie}</div>
+                        ${noteHtml}
+                        ${volumeHtml}
+                    </div>
+                `;
+            });
+        }
+        
+        bodyHtml += `<button class="secondary" style="margin-top:8px;" onclick="apriProgressiDaStorico(decodeURIComponent('${encodeURIComponent(normEx)}'))">📈 Apri analisi progressi avanzata</button>`;
+        document.getElementById('modalTitle').innerHTML = `${exName} <span class="badge" style="${generaStileBadge(gruppo)}">${gruppo}</span>`;
+        document.getElementById('modalBody').innerHTML = bodyHtml;
+        document.getElementById('dataModal').classList.add('active');
+    }
+
+    function renderCalendario() {
+        const grid = document.getElementById('calendarGrid'); grid.innerHTML = "";
+        const oggi = new Date(); const mese = oggi.getMonth(); const anno = oggi.getFullYear();
+        const nomiMesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+        document.getElementById('calMonthTitle').innerText = `${nomiMesi[mese]} ${anno}`;
+
+        const giorniMese = new Date(anno, mese + 1, 0).getDate();
+        let primoGiorno = new Date(anno, mese, 1).getDay(); primoGiorno = primoGiorno === 0 ? 6 : primoGiorno - 1; 
+
+        let mapGiorniAllenati = {};
+        historyData.forEach(session => {
+            let partiData = session.date.split('/');
+            if(partiData.length === 3) {
+                let d = parseInt(partiData[0]), m = parseInt(partiData[1]) - 1, y = parseInt(partiData[2]);
+                if (m === mese && y === anno) {
+                    if (!mapGiorniAllenati[d]) mapGiorniAllenati[d] = new Set();
+                    mapGiorniAllenati[d].add(session.routineColor || (session.routine === "Sessione Cardio" ? "#34c759" : "#0a84ff"));
+                }
+            }
+        });
+
+        for (let i = 0; i < primoGiorno; i++) grid.innerHTML += `<div class="cal-day cal-empty"></div>`;
+
+        for (let giorno = 1; giorno <= giorniMese; giorno++) {
+            let isOggi = (giorno === oggi.getDate()) ? 'color: var(--primary); font-weight: 800; font-size: 14px;' : '';
+            let palliniHTML = ""; let hasWorkout = mapGiorniAllenati[giorno];
+            if (hasWorkout) { [...mapGiorniAllenati[giorno]].forEach(coloreHex => { palliniHTML += `<span class="cal-dot" style="background-color: ${coloreHex};"></span>`; }); }
+            
+            let dateStr = `${giorno.toString().padStart(2, '0')}/${(mese+1).toString().padStart(2, '0')}/${anno}`;
+            let clickAction = hasWorkout ? `onclick="apriDettagliCalendario('${dateStr}')" style="cursor:pointer;"` : '';
+            grid.innerHTML += `<div class="cal-day" ${clickAction}><span class="cal-day-num" style="${isOggi}">${giorno}</span><div class="cal-dots">${palliniHTML}</div></div>`;
+        }
+    }
+
+    function apriDettagliCalendario(dataStr) {
+        let sessioniDelGiorno = historyData.filter(s => s.date === dataStr);
+        let bodyHtml = "";
+        
+        sessioniDelGiorno.forEach((sess) => {
+            let rColor = sess.routineColor || (sess.routine === "Sessione Cardio" ? "#34c759" : "#0a84ff");
+            let realIndex = historyData.indexOf(sess);
+
+            let exHtml = sess.data.map(ex => {
+                let gruppo = ottieniGruppoMuscolare(ex.name);
+                let setsHtml = (ex.sets && ex.sets.length > 0) ? ex.sets.map((s, i) => {
+                    if (gruppo === "Cardio") return `${s.reps} min ${parseFloat(s.kg) > 0 ? '| ' + s.kg + ' km' : ''}`;
+                    else {
+                        let prefs = s.type === 'warmup' ? 'W' : (s.type === 'drop' ? '↳D' : `S${i+1}`);
+                        let strRepOut = s.repsSx !== undefined ? `${s.reps}/${s.repsSx}` : s.reps;
+                        return `${prefs}: ${strRepOut}x${s.kg}kg`;
+                    }
+                }).join(' | ') : '<i>Solo note</i>';
+                let noteHtml = ex.notes ? `<div style="font-size: 12px; color: var(--text-sec); font-style: italic; margin-top: 2px;">📝 Note: ${ex.notes}</div>` : '';
+                return `<div style="margin-top: 12px; font-size: 14px;"><b style="color: white;">${ex.name}</b><br><span style="color: var(--text-sec); font-size: 13px;">${setsHtml}</span>${noteHtml}</div>`;
+            }).join('');
+
+            bodyHtml += `
+                <div style="background: #2c2c2e; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 5px solid ${rColor}; position: relative;">
+                    <button class="danger" style="position: absolute; top: 12px; right: 12px; width: auto; padding: 6px 10px; font-size: 12px; margin: 0;" onclick="eliminaSessioneStorico(${realIndex})">🗑️ Elimina</button>
+                    <h4 style="color: ${rColor}; margin: 0; font-size: 18px; text-transform: uppercase; padding-right: 70px;">${sess.routine}</h4>
+                    <p style="font-size: 12px; color: var(--text-sec); margin: 5px 0 10px 0;">Esercizi totali: ${sess.data.length}</p>
+                    <div style="border-top: 1px solid #3a3a3c; padding-top: 5px;">${exHtml}</div>
+                </div>
+            `;
+        });
+        document.getElementById('modalTitle').innerText = `Dati del ${dataStr}`;
+        document.getElementById('modalBody').innerHTML = bodyHtml;
+        document.getElementById('dataModal').classList.add('active');
+    }
+
+    function eliminaSessioneStorico(indexDatabase) {
+        if(confirm("⚠️ Vuoi davvero eliminare questo intero allenamento dallo storico?\n\nI dati sui volumi e i massimali di quella giornata verranno rimossi. L'azione è irreversibile.")) {
+            historyData.splice(indexDatabase, 1);
+            localStorage.setItem('wk_history', JSON.stringify(historyData));
+            chiudiModale();
+            renderCalendario();
+        }
+    }
+
+    function loggaCardioOggi() {
+        let tipo = prompt("Tipo di Attività (es. Corsa, Bici):", "Corsa"); if(!tipo) return;
+        let min = prompt("Minuti di durata:", "30"); if(!min) return;
+        let km = prompt("Chilometri percorsi (0 se non li sai):", "5");
+        let dateStr = new Date().toLocaleDateString('it-IT');
+        let nomeNorm = normalizzaNome(tipo);
+        userMuscleMap[nomeNorm] = "Cardio"; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap));
+        historyData.push({ date: dateStr, routine: "Sessione Cardio", routineColor: "#34c759", data: [{ name: nomeNorm, sets: [{ kg: parseFloat(km||0), reps: parseInt(min||0), type: 'normal' }] }] });
+        localStorage.setItem('wk_history', JSON.stringify(historyData)); renderCalendario(); alert("Cardio registrato!");
+    }
+
+    function renderDashboard() {
+        const container = document.getElementById('routinesContainer'); container.innerHTML = "";
+        routines.forEach((r, index) => {
+            container.innerHTML += `
+                <div style="background: #2c2c2e; border: 1px solid #3a3a3c; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; padding: 15px; margin-bottom: 12px;">
+                    <div style="flex: 1; overflow: hidden; padding-right: 10px;">
+                        <h3 style="margin: 0; font-size: 16px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${r.name}</h3>
+                        <p style="color:var(--text-sec); font-size:12px; margin: 4px 0 0 0;">${r.exercises.length} esercizi</p>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="secondary" style="width: 40px; height: 40px; padding: 0; margin: 0; display: flex; justify-content: center; align-items: center; border-radius: 8px; font-size: 16px;" onclick="apriEditorScheda(${index})" title="Modifica">✏️</button>
+                        <button class="danger" style="width: 40px; height: 40px; padding: 0; margin: 0; display: flex; justify-content: center; align-items: center; border-radius: 8px; font-size: 16px;" onclick="eliminaScheda(${index})" title="Elimina">🗑️</button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        let undoContainer = document.getElementById('undoContainer');
+        undoContainer.innerHTML = "";
+        
+        if (localStorage.getItem('wk_closed_session_backup')) {
+             undoContainer.innerHTML += `<button class="warning" style="margin-bottom: 10px; font-weight:bold; box-shadow: 0 0 15px rgba(255, 214, 10, 0.4);" onclick="ripristinaAllenamentoChiuso()">↩️ Ripristina Allenamento Annullato</button>`;
+        }
+        
+        if (localStorage.getItem('wk_last_saved_backup')) {
+             undoContainer.innerHTML += `<button class="secondary" style="margin-bottom: 15px; background: #3a3a3c;" onclick="tornaIndietroAlWorkout()">✏️ Riapri ultimo allenamento salvato</button>`;
+        }
+    }
+
+    function ripristinaAllenamentoChiuso() {
+        let backup = localStorage.getItem('wk_closed_session_backup');
+        if (backup) {
+            let state = JSON.parse(backup);
+            currentWorkout = state;
+            if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
+            if(!currentWorkout.recordedData) currentWorkout.recordedData = [];
+            workoutStartTime = state.workoutStartTime || Date.now();
+            localStorage.removeItem('wk_closed_session_backup'); 
+            localStorage.removeItem('wk_last_saved_backup');
+            localStorage.setItem('wk_active_session', JSON.stringify(currentWorkout)); 
+            clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
+            switchView('view-workout'); caricaEsercizioCorrente(true);
+        }
+    }
+
+    function tornaIndietroAlWorkout() {
+        let backup = localStorage.getItem('wk_last_saved_backup');
+        if (backup) {
+            let state = JSON.parse(backup);
+            currentWorkout = state;
+            if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
+            if(!currentWorkout.recordedData) currentWorkout.recordedData = [];
+            
+            if (!currentWorkout.isDeload && historyData.length > 0) {
+                historyData.pop();
+                localStorage.setItem('wk_history', JSON.stringify(historyData));
+            }
+            
+            localStorage.removeItem('wk_last_saved_backup');
+            localStorage.setItem('wk_active_session', JSON.stringify(currentWorkout)); 
+            
+            workoutStartTime = currentWorkout.workoutStartTime || Date.now();
+            clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
+            
+            chiudiModale();
+            switchView('view-workout');
+            caricaEsercizioCorrente(true); 
+        }
+    }
+
+    function apriSelezioneScheda() {
+        let htmlMix = `
+            <label style="display:flex; align-items:center; gap:10px; background: rgba(255, 214, 10, 0.1); border: 1px solid var(--warning); padding: 15px; border-radius: 12px; margin-bottom: 20px; cursor: pointer;">
+                <input type="checkbox" id="deloadToggle" style="width:24px; height:24px;">
+                <span style="font-size:14px; color:var(--text); line-height: 1.3;"><b>Attiva Settimana di Scarico</b><br><span style="color:var(--warning); font-size:12px;">Riduce i target del 10% e taglia 1 serie (sessione non salvata nel DB)</span></span>
+            </label>
+            <button style="background: linear-gradient(45deg, #bf5af2, #0a84ff); color: white; padding:20px; margin-bottom:25px; font-size:16px; border-radius:12px; font-weight:bold; box-shadow: 0 4px 15px rgba(0,0,0,0.4);" onclick="generaMixAI(); chiudiModale();">
+                ✨ GENERA MIX A.I. (Ottimizza Settimana)
+            </button>
+            <hr style="border-color:#3a3a3c; margin-bottom:20px;">
+            <p style="font-size:12px; color:var(--text-sec); margin-bottom:10px;">Oppure scegli una scheda manuale:</p>
+        `;
+        let htmlRoutines = "";
+        if(routines.length > 0) {
+            htmlRoutines = routines.map((r, i) => {
+                let rColor = r.color || '#0a84ff';
+                let textColor = isLightColor(rColor) ? 'black' : 'white';
+                return `<button style="background:${rColor}; color:${textColor}; padding:20px; margin-bottom:15px; font-size:18px; border-radius:12px; font-weight:bold; box-shadow: 0 4px 10px rgba(0,0,0,0.5);" onclick="avviaWorkout(${i}); chiudiModale();">➔ ${r.name.toUpperCase()}</button>`;
+            }).join('');
+        } else {
+            htmlRoutines = "<p style='color:var(--text-sec); font-size:14px;'>Nessuna scheda creata. Usa il bottone '+' nella Dashboard.</p>";
+        }
+        
+        document.getElementById('modalTitle').innerText = "Quale scheda facciamo oggi?";
+        document.getElementById('modalBody').innerHTML = htmlMix + htmlRoutines;
+        document.getElementById('dataModal').classList.add('active');
+    }
+
+    function apriEditorScheda(index) { 
+        editIndexRoutine = index; 
+        document.getElementById('editRoutineName').innerText = routines[index].name; 
+        document.getElementById('editRoutineColor').value = routines[index].color || "#0a84ff";
+        renderEditorEsercizi(); 
+        switchView('view-edit-routine'); 
+    }
+    
+    function aggiornaColoreScheda(colorHex) { routines[editIndexRoutine].color = colorHex; }
+
+    function renderEditorEsercizi() {
+        const container = document.getElementById('editExercisesContainer'); container.innerHTML = "";
+        let exArr = routines[editIndexRoutine].exercises;
+        
+        exArr.forEach((ex, i) => {
+            container.innerHTML += `
+                <div class="edit-row">
+                    <span style="font-weight: 500; font-size: 15px;">${i+1}. ${ex}</span>
+                    <div style="display:flex; gap: 5px;">
+                        <button class="action-btn" onclick="spostaEsercizio(${i}, -1)" ${i === 0 ? 'disabled style="opacity:0.3"' : ''}>↑</button>
+                        <button class="action-btn" onclick="spostaEsercizio(${i}, 1)" ${i === exArr.length - 1 ? 'disabled style="opacity:0.3"' : ''}>↓</button>
+                        <button class="action-btn danger-btn" onclick="rimuoviEsercizioDaScheda(${i})">X</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        let opzioniEsercizi = ottieniListaEserciziUnici().map(ex => `<option value="${ex}">${ex}</option>`).join('');
+
+        container.innerHTML += `
+            <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
+                <select id="newExSelect" style="flex: 1; margin-bottom: 0;">
+                    <option value="" disabled selected>Seleziona esercizio...</option>
+                    ${opzioniEsercizi}
+                    <option value="_NEW_" style="color: var(--primary); font-weight: bold;">+ Crea Nuovo Esercizio...</option>
+                </select>
+                <button class="secondary" style="width: auto; margin-bottom: 0; padding: 12px 15px;" onclick="aggiungiEsercizioSelect()">Aggiungi</button>
+            </div>
+        `;
+    }
+    
+    function aggiungiEsercizioSelect() {
+        let selectEl = document.getElementById('newExSelect'); let nome = selectEl.value;
+        if (nome === "_NEW_") {
+            let nuovoNome = prompt("Inserisci il nome del nuovo esercizio:");
+            if (nuovoNome && nuovoNome.trim() !== "") {
+                let n = normalizzaNome(nuovoNome);
+                routines[editIndexRoutine].exercises.push(n); 
+                if (!userMuscleMap[n]) { userMuscleMap[n] = "Altro / Vari"; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); }
+                renderEditorEsercizi(); 
+            }
+        } else if (nome && nome.trim() !== "") { 
+            routines[editIndexRoutine].exercises.push(nome); renderEditorEsercizi(); 
+        } else { alert("Seleziona un esercizio dal menu."); }
+    }
+    
+    function spostaEsercizio(index, direzione) { let arr = routines[editIndexRoutine].exercises; if (index + direzione < 0 || index + direzione >= arr.length) return; let temp = arr[index]; arr[index] = arr[index + direzione]; arr[index + direzione] = temp; renderEditorEsercizi(); }
+    function rimuoviEsercizioDaScheda(index) { routines[editIndexRoutine].exercises.splice(index, 1); renderEditorEsercizi(); }
+    function salvaModificheScheda() { localStorage.setItem('wk_routines', JSON.stringify(routines)); switchView('view-dashboard'); }
+    function eliminaScheda(index) { if(confirm("Eliminare definitivamente questa scheda?")) { routines.splice(index, 1); localStorage.setItem('wk_routines', JSON.stringify(routines)); renderDashboard(); } }
+    function creaNuovaScheda() { let nome = prompt("Nome della nuova scheda:"); if(nome) { routines.push({ id: Date.now(), name: nome, color: "#0a84ff", exercises: [] }); localStorage.setItem('wk_routines', JSON.stringify(routines)); apriEditorScheda(routines.length - 1); } }
+
+    function avviaWorkout(routineIndex) {
+        let routine = routines[routineIndex];
+        if (routine.exercises.length === 0) return alert("Scheda vuota! Aggiungi esercizi modificandola.");
+        
+        let isDeloadActive = document.getElementById('deloadToggle') ? document.getElementById('deloadToggle').checked : false;
+
+        pulisciStatoWorkout(); 
+        localStorage.removeItem('wk_closed_session_backup');
+        localStorage.removeItem('wk_last_saved_backup');
+        currentWorkout = { routineName: routine.name, routineColor: routine.color || "#0a84ff", exercises: [...routine.exercises], currentExIndex: 0, recordedData: [], isDeload: isDeloadActive, unilateralFlags: {} };
+        workoutStartTime = Date.now();
+        clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000); aggiornaTimerTotale();
+        switchView('view-workout'); caricaEsercizioCorrente();
+    }
+    
+    function aggiornaTimerTotale() {
+        let elapsedSec = Math.floor((Date.now() - workoutStartTime) / 1000);
+        let h = Math.floor(elapsedSec / 3600), m = Math.floor((elapsedSec % 3600) / 60).toString().padStart(2, '0'), s = (elapsedSec % 60).toString().padStart(2, '0');
+        document.getElementById('totalWorkoutTimer').innerText = h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
+    }
+    
+    function posticipaEsercizioCorrente() {
+        if (currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) return alert("Questo è l'ultimo esercizio rimasto.");
+        
+        salvaDatiEsercizioUI();
+        let idx = currentWorkout.currentExIndex;
+        let len = currentWorkout.exercises.length;
+        
+        let esPosticipato = currentWorkout.exercises.splice(idx, 1)[0];
+        currentWorkout.exercises.push(esPosticipato);
+        
+        let recPosticipato = currentWorkout.recordedData.splice(idx, 1)[0];
+        currentWorkout.recordedData.push(recPosticipato);
+        
+        if (currentWorkout.unilateralFlags) {
+            let newFlags = {};
+            let movedFlag = currentWorkout.unilateralFlags[idx];
+            for (let i = 0; i < len; i++) {
+                if (i < idx) newFlags[i] = currentWorkout.unilateralFlags[i];
+                else if (i > idx) newFlags[i - 1] = currentWorkout.unilateralFlags[i];
+            }
+            if (movedFlag !== undefined) newFlags[len - 1] = movedFlag;
+            currentWorkout.unilateralFlags = newFlags;
+        }
+
+        caricaEsercizioCorrente(); 
+    }
+
+    function sostituisciEsercizioCorrente() {
+        let opzioniEsercizi = ottieniListaEserciziUnici().map(ex => `<option value="${ex}">${ex}</option>`).join('');
+        let html = `
+            <p style="color: var(--text-sec); font-size: 14px; margin-bottom: 10px;">Scegli un esercizio o creane uno nuovo.</p>
+            <select id="selectCambiaEx" style="margin-bottom: 15px; width: 100%; padding: 12px; border-radius: 8px; background: #2c2c2e; color: white; border: none; outline: none; font-size: 16px;">
+                <option value="" disabled selected>Seleziona esercizio...</option>
+                ${opzioniEsercizi}
+                <option value="_NEW_" style="color: var(--primary); font-weight: bold;">+ Crea Nuovo Esercizio...</option>
+            </select>
+            <button onclick="confermaSostituzioneEx()" style="background: var(--success); color: black;">Conferma Modifica</button>
+        `;
+        document.getElementById('modalTitle').innerText = "Cambia Esercizio";
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('dataModal').classList.add('active');
+    }
+
+    function confermaSostituzioneEx() {
+        let sel = document.getElementById('selectCambiaEx');
+        let valore = sel.value;
+        if (!valore) return alert("Seleziona un esercizio dal menu!");
+        
+        let nuovo = valore === "_NEW_" ? prompt("Inserisci il nome del nuovo esercizio:") : valore;
+        
+        if (nuovo && nuovo.trim() !== "") { 
+            let nomeNorm = normalizzaNome(nuovo);
+            currentWorkout.exercises[currentWorkout.currentExIndex] = nomeNorm; 
+            delete currentWorkout.recordedData[currentWorkout.currentExIndex];
+            if (currentWorkout.unilateralFlags) delete currentWorkout.unilateralFlags[currentWorkout.currentExIndex];
+            
+            if(!userMuscleMap[nomeNorm]) { 
+                userMuscleMap[nomeNorm] = "Altro / Vari"; 
+                localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); 
+            }
+            caricaEsercizioCorrente(); 
+            chiudiModale(); 
+        }
+    }
+
+    function aggiungiEsercizioInCoda() {
+        let opzioniEsercizi = ottieniListaEserciziUnici().map(ex => `<option value="${ex}">${ex}</option>`).join('');
+        let html = `
+            <p style="color: var(--text-sec); font-size: 14px; margin-bottom: 10px;">Aggiungi un esercizio in fondo alla scheda di oggi.</p>
+            <select id="selectAggiungiEx" style="margin-bottom: 15px; width: 100%; padding: 12px; border-radius: 8px; background: #2c2c2e; color: white; border: none; outline: none; font-size: 16px;">
+                <option value="" disabled selected>Seleziona esercizio...</option>
+                ${opzioniEsercizi}
+                <option value="_NEW_" style="color: var(--primary); font-weight: bold;">+ Crea Nuovo Esercizio...</option>
+            </select>
+            <button onclick="confermaAggiuntaExCoda()" style="background: var(--success); color: black;">Aggiungi Esercizio</button>
+        `;
+        document.getElementById('modalTitle').innerText = "Aggiungi Extra";
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('dataModal').classList.add('active');
+    }
+
+    function confermaAggiuntaExCoda() {
+        let sel = document.getElementById('selectAggiungiEx');
+        let valore = sel.value;
+        if (!valore) return alert("Seleziona un esercizio dal menu!");
+        
+        let nuovo = valore === "_NEW_" ? prompt("Inserisci il nome del nuovo esercizio:") : valore;
+        
+        if (nuovo && nuovo.trim() !== "") { 
+            let nomeNorm = normalizzaNome(nuovo);
+            currentWorkout.exercises.push(nomeNorm); 
+            if(!userMuscleMap[nomeNorm]) { 
+                userMuscleMap[nomeNorm] = "Altro / Vari"; 
+                localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); 
+            }
+            document.getElementById('woProgress').innerText = `Esercizio ${currentWorkout.currentExIndex + 1} di ${currentWorkout.exercises.length}`; 
+            
+            let btnNext = document.getElementById('btnNextExercise');
+            if(currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) {
+                btnNext.innerText = "Termina e Salva 🏁"; btnNext.style.background = "var(--success)";
+            } else {
+                btnNext.innerText = "Esercizio Succ. ➔"; btnNext.style.background = "var(--primary)";
+            }
+            
+            salvaStatoWorkout(); 
+            chiudiModale(); 
+        }
+    }
+
+    function aggiornaBarbellMath() {
+        let isUnilat = currentWorkout.unilateralFlags && currentWorkout.unilateralFlags[currentWorkout.currentExIndex];
+        let exName = currentWorkout.exercises[currentWorkout.currentExIndex].toLowerCase();
+        let container = document.getElementById('barbellMathContainer');
+        
+        if (isUnilat || (!exName.includes("hip thrust") && !exName.includes("squat") && !exName.includes("panca piana"))) { 
+            container.style.display = "none"; 
+            return; 
+        }
+        
+        container.style.display = "block";
+        let inputs = document.querySelectorAll('.kg-input'); let ultimoValore = 0;
+        inputs.forEach(inp => { if(inp.value) ultimoValore = parseFloat(inp.value); });
+        
+        let resultSpan = document.getElementById('barbellMathResult');
+        if(ultimoValore <= 20) { resultSpan.innerText = "Solo bilanciere vuoto o peso troppo basso."; return; }
+
+        let perLato = (ultimoValore - 20) / 2; let piastre = [25, 20, 15, 10, 5, 2.5, 1.25]; let caricamento = [];
+        for (let p of piastre) { let count = Math.floor(perLato / p); if (count > 0) { caricamento.push(`${count}x${p}kg`); perLato = (perLato % p).toFixed(2); } }
+        resultSpan.innerText = caricamento.length > 0 ? `Per lato: [ ${caricamento.join(' ] + [ ')} ]` : "Peso non standardizzabile.";
+    }
+
+    function salvaDatiEsercizioUI() {
+        if (!currentWorkout || !currentWorkout.exercises || currentWorkout.exercises.length === 0) return;
+        let setRows = document.querySelectorAll('#setsContainer .set-row');
+        let setsData = [];
+        setRows.forEach(row => {
+            let kgInput = row.querySelector('.kg-input');
+            let repsInputDx = row.querySelector('.reps-input-dx');
+            let repsInputSx = row.querySelector('.reps-input-sx');
+            let repsInputNorm = row.querySelector('.reps-input:not(.reps-input-dx):not(.reps-input-sx)');
+            
+            if (kgInput) {
+                let kgVal = kgInput.value;
+                let repsVal = repsInputDx ? repsInputDx.value : (repsInputNorm ? repsInputNorm.value : "");
+                let repsSxVal = repsInputSx ? repsInputSx.value : undefined;
+                setsData.push({ kg: kgVal, reps: repsVal, repsSx: repsSxVal, type: row.dataset.type });
+            }
+        });
+        
+        let notesEl = document.getElementById('woExerciseNotes');
+        let currentNotes = notesEl ? notesEl.value : '';
+        let exNameNorm = normalizzaNome(currentWorkout.exercises[currentWorkout.currentExIndex]);
+
+        // Sincronizza anche nella mappa permanente delle note
+        exerciseNotesMap[exNameNorm] = currentNotes;
+        localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
+
+        currentWorkout.recordedData[currentWorkout.currentExIndex] = { 
+            name: currentWorkout.exercises[currentWorkout.currentExIndex], 
+            sets: setsData,
+            notes: currentNotes
+        };
+    }
+
+    function precedenteEsercizio() {
+        salvaDatiEsercizioUI(); 
+        if (currentWorkout.currentExIndex > 0) {
+            currentWorkout.currentExIndex--;
+            caricaEsercizioCorrente();
+        }
+    }
+
+    function toggleUnilateral() {
+        salvaDatiEsercizioUI();
+        if(!currentWorkout.unilateralFlags) currentWorkout.unilateralFlags = {};
+        currentWorkout.unilateralFlags[currentWorkout.currentExIndex] = document.getElementById('unilateralToggle').checked;
+        caricaEsercizioCorrente(true); 
+    }
+
+    function caricaEsercizioCorrente(isRestoring = false) {
+        fermaTimer();
+        let exName = currentWorkout.exercises[currentWorkout.currentExIndex];
+        let normExName = normalizzaNome(exName);
+        let gruppoMusc = ottieniGruppoMuscolare(exName);
+        document.getElementById('woRoutineName').innerText = currentWorkout.routineName;
+        document.getElementById('woProgress').innerText = `Esercizio ${currentWorkout.currentExIndex + 1} di ${currentWorkout.exercises.length}`;
+        document.getElementById('woExerciseName').innerHTML = `${exName} <span class="badge" style="${generaStileBadge(gruppoMusc)}">${gruppoMusc}</span>`;
+        
+        let isUnilat = currentWorkout.unilateralFlags && currentWorkout.unilateralFlags[currentWorkout.currentExIndex];
+        document.getElementById('unilateralToggle').checked = !!isUnilat;
+
+        let pastSets = null;
+        let lastHistoricalNote = null;
+        let activeExData = currentWorkout.recordedData[currentWorkout.currentExIndex];
+        let activeSessionSets = (activeExData && Array.isArray(activeExData.sets)) ? activeExData.sets : null;
+        let targetTextEl = document.getElementById('woTargetData');
+        targetTextEl.style.display = "none";
+
+        // Recupera la seduta più recente dello stesso esercizio, non il carico massimo di tutta la storia.
+        for (let i = historyData.length - 1; i >= 0; i--) {
+            let foundEx = (historyData[i].data || []).find(e => normalizzaNome(e.name) === normExName);
+            if (foundEx) {
+                if (foundEx.sets && foundEx.sets.length > 0) pastSets = JSON.parse(JSON.stringify(foundEx.sets));
+                if (foundEx.notes && foundEx.notes.trim() !== "") lastHistoricalNote = foundEx.notes.trim();
+                break;
+            }
+        }
+
+        const recommendation = buildNextProgressionRecommendation(normExName);
+        if (currentWorkout.isDeload) {
+            targetTextEl.innerHTML = `🧘 <b>SETTIMANA DI SCARICO</b><br><span style="font-size:12px; font-weight:normal; color:var(--text-sec);">Usa carichi e volume ridotti. La seduta di scarico non verrà usata per aggiornare i record di progressione.</span>`;
+            targetTextEl.style.display = "block";
+        } else if (recommendation) {
+            const targetLines = recommendation.targets.map((t, i) => `<div class="progress-target-row"><span>Serie ${i + 1}</span><b>${formatKg(t.kg)} kg × ${t.reps} reps</b></div>`).join('');
+            targetTextEl.innerHTML = `<span style="font-size:12px; font-weight:normal; color:var(--text-sec); display:block; margin-bottom:4px;">📊 DOPPIA PROGRESSIONE · ${recommendation.settings.minReps}–${recommendation.settings.maxReps} reps</span><b>${recommendation.title}</b><div style="font-size:12px; margin:5px 0 8px;">${recommendation.message}</div>${targetLines}<span style="display:block; margin-top:8px; font-size:11px; color:var(--text-sec);">Impostazioni e grafici: <span style="color:var(--primary); text-decoration:underline; cursor:pointer;" onclick="apriProgressi()">Apri Progressi</span></span>`;
+            targetTextEl.style.display = "block";
+        }
+
+        if (pastSets && pastSets.length > 0) {
+            if (currentWorkout.isDeload && pastSets.length > 1) pastSets.pop();
+            pastSets = pastSets.map(s => {
+                if (s.type === 'normal' && s.kg) {
+                    let k = parseFloat(s.kg);
+                    if (isUnilat && s.repsSx === undefined) k *= 0.55;
+                    if (!isUnilat && s.repsSx !== undefined) k /= 0.55;
+                    if (currentWorkout.isDeload) k *= 0.9;
+                    return {...s, kg: k.toFixed(1).replace('.0','')};
+                }
+                return s;
+            });
+        }
+
+        // CARICAMENTO NOTA PERMANENTE DIRETTAMENTE NEL TEXTAREA MODIFICABILE
+        let notesTextarea = document.getElementById('woExerciseNotes');
+        if (activeExData && activeExData.notes !== undefined) {
+            notesTextarea.value = activeExData.notes;
+        } else if (exerciseNotesMap[normExName] !== undefined) {
+            notesTextarea.value = exerciseNotesMap[normExName];
+        } else if (lastHistoricalNote !== null) {
+            notesTextarea.value = lastHistoricalNote;
+            exerciseNotesMap[normExName] = lastHistoricalNote;
+            localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap));
+        } else {
+            notesTextarea.value = "";
+        }
+
+        document.getElementById('setsContainer').innerHTML = "";
+        
+        if (activeSessionSets && activeSessionSets.length > 0) {
+            activeSessionSets.forEach((s, idx) => {
+                let matchingPast = pastSets && pastSets[idx] ? pastSets[idx] : (pastSets && pastSets[0] ? pastSets[0] : null);
+                aggiungiSerie(s.type || 'normal', matchingPast, s.kg ?? "", s.reps ?? "", s.repsSx ?? "");
+            });
+        } else if (isRestoring && currentWorkout.currentScreenSets && currentWorkout.currentScreenSets.length > 0) {
+            currentWorkout.currentScreenSets.forEach((s, idx) => {
+                let matchingPast = pastSets && pastSets[idx] ? pastSets[idx] : null;
+                aggiungiSerie(s.type || 'normal', matchingPast, s.kg ?? "", s.reps ?? "", s.repsSx ?? "");
+            });
+        } else if (pastSets && pastSets.length > 0) {
+            pastSets.forEach((vecchiaSerie) => aggiungiSerie(vecchiaSerie.type || 'normal', vecchiaSerie));
+        } else {
+            aggiungiSerie('normal');
+        }
+
+        aggiornaBarbellMath(); 
+        
+        let btnPrev = document.getElementById('btnPrevExercise');
+        if (btnPrev) {
+            btnPrev.style.display = currentWorkout.currentExIndex > 0 ? "inline-block" : "none";
+        }
+
+        let btnNext = document.getElementById('btnNextExercise');
+        if(currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) {
+            btnNext.innerText = "Termina e Salva 🏁"; btnNext.style.background = "var(--success)";
+        } else {
+            btnNext.innerText = "Esercizio Succ. ➔"; btnNext.style.background = "var(--primary)";
+        }
+        salvaStatoWorkout();
+    }
+
+    // ===============================================
+    // MOTORE DI PROGRESSIONE E ANALISI DELLO STORICO
+    // ===============================================
+    let selectedProgressExercise = '';
+    let viewBeforeProgress = 'view-dashboard';
+
+    function formatKg(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return '—';
+        return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
+    }
+
+    function escapeProgressHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    }
+
+    function parseWorkoutDate(value) {
+        if (typeof value !== 'string') return null;
+        const it = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (it) {
+            const d = new Date(Number(it[3]), Number(it[2]) - 1, Number(it[1]), 12, 0, 0);
+            return Number.isNaN(d.getTime()) ? null : d;
+        }
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    function getProgressionSettings(exerciseName) {
+        const key = normalizzaNome(exerciseName || '');
+        const saved = progressionSettings[key] || {};
+        let minReps = Math.max(1, Math.min(30, parseInt(saved.minReps, 10) || 8));
+        let maxReps = Math.max(minReps + 1, Math.min(40, parseInt(saved.maxReps, 10) || 12));
+        let increment = parseFloat(saved.increment);
+        if (!Number.isFinite(increment) || increment <= 0) increment = 2.5;
+        return { minReps, maxReps, increment };
+    }
+
+    function getExerciseSessions(exerciseName) {
+        const norm = normalizzaNome(exerciseName || '');
+        return historyData.map((session, index) => {
+            const ex = (session.data || []).find(item => normalizzaNome(item.name) === norm);
+            if (!ex) return null;
+            const allLoadedSets = (ex.sets || []).filter(set => {
+                const kg = Number(set.kg);
+                const reps = Number(set.reps);
+                return set.type !== 'warmup' && Number.isFinite(kg) && kg >= 0 && Number.isFinite(reps) && reps > 0;
+            });
+            const progressionSets = allLoadedSets.filter(set => set.type !== 'drop').map(set => {
+                const kg = Number(set.kg);
+                const right = Math.max(0, parseInt(set.reps, 10) || 0);
+                const left = set.repsSx !== undefined ? Math.max(0, parseInt(set.repsSx, 10) || 0) : null;
+                const limitingReps = left === null ? right : Math.min(right, left);
+                const totalReps = left === null ? right : right + left;
+                const formulaReps = Math.min(30, limitingReps);
+                const oneRM = kg > 0 && formulaReps > 0 ? kg * 36 / (37 - formulaReps) : null;
+                return { kg, reps: limitingReps, right, left, totalReps, oneRM };
+            }).filter(set => set.kg > 0 && set.reps > 0);
+            if (!progressionSets.length) return null;
+
+            const volume = allLoadedSets.reduce((sum, set) => {
+                const kg = Number(set.kg) || 0;
+                const right = Number(set.reps) || 0;
+                const left = set.repsSx !== undefined ? (Number(set.repsSx) || 0) : 0;
+                return sum + kg * (right + left);
+            }, 0);
+            const oneRMValues = progressionSets.map(set => set.oneRM).filter(Number.isFinite);
+            const dateObj = parseWorkoutDate(session.date);
+            return {
+                index, date: session.date || 'Data n.d.', dateObj,
+                routine: session.routine || '',
+                sets: progressionSets,
+                volume,
+                totalSets: progressionSets.length,
+                best1RM: oneRMValues.length ? Math.max(...oneRMValues) : null,
+                maxLoad: Math.max(...progressionSets.map(set => set.kg)),
+                totalReps: progressionSets.reduce((sum, set) => sum + set.totalReps, 0)
+            };
+        }).filter(Boolean).sort((a, b) => {
+            if (a.dateObj && b.dateObj) return a.dateObj - b.dateObj || a.index - b.index;
+            if (a.dateObj) return 1;
+            if (b.dateObj) return -1;
+            return a.index - b.index;
+        });
+    }
+
+    function buildNextProgressionRecommendation(exerciseName) {
+        const sessions = getExerciseSessions(exerciseName);
+        if (!sessions.length) return null;
+        const last = sessions[sessions.length - 1];
+        const settings = getProgressionSettings(exerciseName);
+        const reachedTopWithEverySet = last.sets.length > 0 && last.sets.every(set => set.reps >= settings.maxReps);
+        const targets = last.sets.map(set => {
+            const newKg = reachedTopWithEverySet ? set.kg + settings.increment : set.kg;
+            const nextReps = reachedTopWithEverySet ? settings.minReps : Math.min(settings.maxReps, set.reps + 1);
+            return { kg: Math.round(newKg * 100) / 100, reps: nextReps };
+        });
+        return {
+            settings,
+            targets,
+            reachedTopWithEverySet,
+            title: reachedTopWithEverySet ? `Tutte le serie hanno raggiunto ${settings.maxReps} reps` : `Consolida il carico attuale`,
+            message: reachedTopWithEverySet
+                ? `Nell'ultima seduta tutte le serie allenanti hanno raggiunto il limite alto. Nella prossima esposizione prova un incremento di ${formatKg(settings.increment)} kg e riparti da ${settings.minReps} reps.`
+                : `Mantieni i carichi dell'ultima seduta e prova ad aggiungere circa 1 ripetizione per serie, restando nella fascia ${settings.minReps}–${settings.maxReps}. Il peso si aumenta quando tutte le serie raggiungono il limite alto.`
+        };
+    }
+
+    function generaGraficoProgressi(values, title, color, unit) {
+        const usable = values.filter(item => Number.isFinite(item.value));
+        if (usable.length < 2) {
+            return `<div class="progress-note">Servono almeno due sedute registrate per mostrare l'andamento di ${escapeProgressHtml(title.toLowerCase())}.</div>`;
+        }
+        const W = 620, H = 190, left = 48, right = 16, top = 18, bottom = 38;
+        let vals = usable.map(item => item.value);
+        let min = Math.min(...vals), max = Math.max(...vals);
+        if (max === min) { max += 1; min = Math.max(0, min - 1); }
+        const x = i => left + (usable.length === 1 ? 0 : i * (W - left - right) / (usable.length - 1));
+        const y = v => top + (max - v) * (H - top - bottom) / (max - min);
+        const coords = usable.map((item, i) => `${x(i).toFixed(1)},${y(item.value).toFixed(1)}`).join(' ');
+        const grid = [0, 1, 2, 3].map(i => {
+            const v = max - (max - min) * i / 3;
+            const py = y(v);
+            return `<line x1="${left}" y1="${py}" x2="${W-right}" y2="${py}" stroke="#48484a" stroke-width="1"/><text x="${left-8}" y="${py+4}" fill="#a1a1a6" font-size="10" text-anchor="end">${v.toFixed(0)}</text>`;
+        }).join('');
+        const points = usable.map((item, i) => `<circle cx="${x(i)}" cy="${y(item.value)}" r="4" fill="${color}"><title>${escapeProgressHtml(item.date)}: ${item.value.toFixed(1)} ${unit}</title></circle>`).join('');
+        const labels = usable.map((item, i) => {
+            if (usable.length > 8 && i % Math.ceil(usable.length / 6) !== 0 && i !== usable.length - 1) return '';
+            return `<text x="${x(i)}" y="${H-12}" fill="#a1a1a6" font-size="10" text-anchor="middle">${escapeProgressHtml(item.date.slice(0,5))}</text>`;
+        }).join('');
+        return `<svg class="progress-chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeProgressHtml(title)}"><title>${escapeProgressHtml(title)}</title>${grid}<polyline points="${coords}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${points}${labels}</svg>`;
+    }
+
+    function apriProgressi(exerciseName = '') {
+        viewBeforeProgress = document.querySelector('.view.active')?.id || 'view-dashboard';
+        selectedProgressExercise = exerciseName || (currentWorkout && currentWorkout.routineName ? currentWorkout.exercises[currentWorkout.currentExIndex] : '') || '';
+        switchView('view-progress');
+    }
+
+    function apriProgressiDaStorico(exerciseName) {
+        viewBeforeProgress = document.querySelector('.view.active')?.id || 'view-archive';
+        selectedProgressExercise = exerciseName || '';
+        switchView('view-progress');
+    }
+
+    function chiudiProgressi() {
+        switchView(viewBeforeProgress || 'view-dashboard');
+    }
+
+    function salvaImpostazioniProgressione() {
+        const name = document.getElementById('progressExerciseSelect')?.value;
+        if (!name) return;
+        const minReps = parseInt(document.getElementById('progressMinReps').value, 10);
+        const maxReps = parseInt(document.getElementById('progressMaxReps').value, 10);
+        const increment = parseFloat(document.getElementById('progressIncrement').value);
+        if (!Number.isFinite(minReps) || !Number.isFinite(maxReps) || minReps < 1 || maxReps <= minReps || maxReps > 40 || !Number.isFinite(increment) || increment <= 0 || increment > 50) {
+            alert('Controlla i parametri: ripetizioni massime maggiori delle minime e incremento positivo.');
+            return;
+        }
+        progressionSettings[normalizzaNome(name)] = { minReps, maxReps, increment };
+        localStorage.setItem('wk_progression_settings', JSON.stringify(progressionSettings));
+        renderProgressi(name);
+    }
+
+    function renderProgressi(requestedExercise = '') {
+        const select = document.getElementById('progressExerciseSelect');
+        const content = document.getElementById('progressContent');
+        if (!select || !content) return;
+        const available = ottieniListaEserciziUnici().filter(name => ottieniGruppoMuscolare(name) !== 'Cardio' && getExerciseSessions(name).length > 0);
+        if (!available.length) {
+            select.innerHTML = '<option value="">Nessun esercizio con dati</option>';
+            content.innerHTML = '<div class="card"><h3>Ancora nessun dato di progressione</h3><p class="progress-note">Completa e salva almeno due sedute dello stesso esercizio per iniziare a vedere i trend. I tuoi allenamenti già registrati compariranno qui automaticamente.</p></div>';
+            return;
+        }
+        const preferred = requestedExercise || selectedProgressExercise || select.value;
+        const selected = available.find(name => normalizzaNome(name) === normalizzaNome(preferred)) || available[0];
+        selectedProgressExercise = selected;
+        select.innerHTML = available.map(name => `<option value="${escapeProgressHtml(name)}" ${normalizzaNome(name) === normalizzaNome(selected) ? 'selected' : ''}>${escapeProgressHtml(name)}</option>`).join('');
+
+        const sessions = getExerciseSessions(selected);
+        const first = sessions[0], last = sessions[sessions.length - 1];
+        const best = sessions.reduce((winner, session) => session.best1RM !== null && (!winner || session.best1RM > winner.best1RM) ? session : winner, null);
+        const changePct = sessions.length > 1 && first.best1RM > 0 && last.best1RM !== null ? ((last.best1RM - first.best1RM) / first.best1RM) * 100 : null;
+        const recentCompare = sessions.length > 1 && sessions[sessions.length-2].best1RM > 0 && last.best1RM !== null
+            ? ((last.best1RM - sessions[sessions.length-2].best1RM) / sessions[sessions.length-2].best1RM) * 100 : null;
+        const deltaClass = changePct === null ? 'progress-neutral' : (changePct >= 0 ? 'progress-positive' : 'progress-negative');
+        const recommendation = buildNextProgressionRecommendation(selected);
+        const setting = getProgressionSettings(selected);
+        const targetHtml = recommendation ? recommendation.targets.map((target, i) => `<div class="progress-target-row"><span>Serie ${i+1}</span><b>${formatKg(target.kg)} kg × ${target.reps}</b></div>`).join('') : '';
+        const chart1 = generaGraficoProgressi(sessions.map(item => ({date:item.date, value:item.best1RM})), '1RM stimato', '#0a84ff', 'kg');
+        const chart2 = generaGraficoProgressi(sessions.map(item => ({date:item.date, value:item.volume})), 'Volume load per seduta', '#bf5af2', 'kg');
+        const settingsHtml = `<div class="progress-chart-card"><h3>⚙️ Parametri di progressione per ${escapeProgressHtml(selected)}</h3><div class="progress-config"><label>Rep min<input id="progressMinReps" type="number" min="1" max="39" value="${setting.minReps}"></label><label>Rep max<input id="progressMaxReps" type="number" min="2" max="40" value="${setting.maxReps}"></label><label>Incremento kg<input id="progressIncrement" type="number" min="0.1" max="50" step="0.5" value="${setting.increment}"></label></div><button style="margin:10px 0 0;" onclick="salvaImpostazioniProgressione()">Salva parametri</button><div class="progress-note">Default: 8–12 ripetizioni e +2,5 kg. Personalizza in base all'esercizio e ai salti disponibili sui macchinari.</div></div>`;
+        const historyHtml = [...sessions].reverse().slice(0, 10).map(session => `<div class="progress-history-row"><span><b>${escapeProgressHtml(session.date)}</b><br><span style="color:var(--text-sec)">${escapeProgressHtml(session.routine)}</span></span><span>${session.best1RM !== null ? `${session.best1RM.toFixed(1)} kg e1RM` : '—'}</span><b>${session.totalSets} serie</b></div>`).join('');
+        const deltaText = changePct === null ? '—' : `${changePct >= 0 ? '+' : ''}${changePct.toFixed(1)}%`;
+        const recentText = recentCompare === null ? 'Una sola seduta comparabile' : `${recentCompare >= 0 ? '+' : ''}${recentCompare.toFixed(1)}% rispetto alla seduta precedente`;
+
+        content.innerHTML = `
+            <div class="progress-stat-grid">
+                <div class="progress-stat"><span class="progress-stat-label">Sedute</span><span class="progress-stat-value">${sessions.length}</span><span class="progress-stat-sub">esposizioni registrate</span></div>
+                <div class="progress-stat"><span class="progress-stat-label">1RM stimato attuale</span><span class="progress-stat-value">${last.best1RM !== null ? `${last.best1RM.toFixed(1)} kg` : '—'}</span><span class="progress-stat-sub">formula Brzycki, non massimale testato</span></div>
+                <div class="progress-stat"><span class="progress-stat-label">Miglior 1RM stimato</span><span class="progress-stat-value">${best && best.best1RM !== null ? `${best.best1RM.toFixed(1)} kg` : '—'}</span><span class="progress-stat-sub">${best ? escapeProgressHtml(best.date) : ''}</span></div>
+                <div class="progress-stat"><span class="progress-stat-label">Trend dall'inizio</span><span class="progress-stat-value ${deltaClass}">${deltaText}</span><span class="progress-stat-sub">${recentText}</span></div>
+            </div>
+            <div class="progress-recommendation"><strong>🎯 Prossima seduta · ${recommendation ? escapeProgressHtml(recommendation.title) : 'Dati insufficienti'}</strong><div style="font-size:13px; margin:6px 0 8px;">${recommendation ? escapeProgressHtml(recommendation.message) : 'Registra una seduta completa per ottenere un obiettivo personalizzato.'}</div>${targetHtml}<div class="progress-note" style="margin-top:8px;">Aumenta il carico solo se le ripetizioni sono state eseguite con tecnica stabile e senza dolore. La regola usa i dati registrati, non conosce da sola il tuo RIR.</div></div>
+            <div class="progress-chart-card"><h3>📈 Andamento della forza · 1RM stimato</h3>${chart1}</div>
+            <div class="progress-chart-card"><h3>🏋️ Volume load per seduta</h3>${chart2}<div class="progress-note">Volume load = kg × ripetizioni registrate. È utile per confrontare sedute simili, ma non misura direttamente la crescita muscolare e cambia anche in base al numero di serie.</div></div>
+            ${settingsHtml}
+            <div class="progress-chart-card"><h3>🗓️ Ultime sedute</h3>${historyHtml || '<p class="progress-note">Nessuna seduta disponibile.</p>'}</div>
+        `;
+    }
+
+    function calcolaRepsEquivalenti1RM(wOld, rOld, wNew) {
+        if (rOld >= 37) return rOld;
+        let oneRM = wOld / (1.0278 - (0.0278 * rOld));
+        let rCalculated = (1.0278 - (wNew / oneRM)) / 0.0278;
+        return Math.max(1, Math.round(rCalculated));
+    }
+
+    function controllaCompletamentoRiga(inputElement) {
+        let row = inputElement.closest('.set-row');
+        let kgInputVal = row.querySelector('.kg-input').value;
+        let isUnilatRow = row.querySelector('.reps-input-dx') !== null;
+        let repsDx = isUnilatRow ? row.querySelector('.reps-input-dx').value : row.querySelector('.reps-input').value;
+        let repsSx = isUnilatRow ? row.querySelector('.reps-input-sx').value : null;
+        let repsForFeedback = isUnilatRow && repsDx !== '' && repsSx !== '' ? Math.min(parseInt(repsDx, 10), parseInt(repsSx, 10)) : parseInt(repsDx || 0, 10);
+
+        if (isUnilatRow) {
+            if (kgInputVal !== "" && repsDx !== "" && repsSx !== "") row.classList.add('completed');
+            else row.classList.remove('completed');
+        } else {
+            if (kgInputVal !== "" && repsDx !== "") row.classList.add('completed');
+            else row.classList.remove('completed');
+        }
+
+        let feedbackEl = row.querySelector('.set-feedback');
+        let kgTyped = parseFloat(kgInputVal);
+        let pastKg = parseFloat(row.dataset.pastKg);
+        let pastReps = parseInt(row.dataset.pastReps, 10);
+        const exerciseName = currentWorkout.exercises[currentWorkout.currentExIndex] || '';
+        const setting = getProgressionSettings(exerciseName);
+
+        if (feedbackEl) {
+            if (!isNaN(kgTyped) && kgTyped > 0 && !isNaN(pastKg) && pastKg > 0 && !isNaN(pastReps) && pastReps > 0) {
+                feedbackEl.style.display = "block";
+                if (kgTyped > pastKg) {
+                    let minReq = calcolaRepsEquivalenti1RM(pastKg, pastReps, kgTyped);
+                    feedbackEl.innerHTML = `⚡ <b>+${(kgTyped - pastKg).toFixed(1).replace('.0','')} kg</b>: punta ad almeno <b>${minReq} reps</b> per mantenere la stima di forza precedente.`;
+                } else if (kgTyped === pastKg) {
+                    let target = Math.min(setting.maxReps, pastReps + 1);
+                    if (pastReps >= setting.maxReps) {
+                        feedbackEl.innerHTML = `🏁 Hai raggiunto ${setting.maxReps} reps con questo carico: verifica anche le altre serie. Se tutte arrivano al limite, valuta <b>+${formatKg(setting.increment)} kg</b> nella prossima seduta.`;
+                    } else {
+                        feedbackEl.innerHTML = `🎯 Stesso carico: prova <b>${target} reps</b> (ultima volta: ${pastReps}; fascia ${setting.minReps}–${setting.maxReps}).`;
+                    }
+                } else {
+                    let target = Math.min(setting.maxReps, Math.max(setting.minReps, pastReps + 1));
+                    feedbackEl.innerHTML = `💡 Carico ridotto: mantieni tecnica e controllo, punta a <b>${target} reps</b> prima di aumentare di nuovo il peso.`;
+                }
+            } else {
+                feedbackEl.style.display = "none";
+            }
+        }
+
+        aggiornaBarbellMath();
+        salvaStatoWorkout();
+    }
+
+    function toggleWarmup(btnElement) {
+        let row = btnElement.closest('.set-row');
+        if (row.dataset.type === 'normal') { row.dataset.type = 'warmup'; row.className = row.className.replace('type-normal', 'type-warmup'); btnElement.classList.add('active-w'); } 
+        else if (row.dataset.type === 'warmup') { row.dataset.type = 'normal'; row.className = row.className.replace('type-warmup', 'type-normal'); btnElement.classList.remove('active-w'); }
+        salvaStatoWorkout();
+    }
+
+    function aggiungiSerie(tipoAtteso = 'normal', pastSet = null, restoreKg = "", restoreReps = "", restoreRepsSx = "") {
+        const container = document.getElementById('setsContainer');
+        let mainSetsCount = container.querySelectorAll('.set-row.type-normal, .set-row.type-warmup').length;
+        let setNumStr = tipoAtteso === 'drop' ? '↳' : `${mainSetsCount + 1}°`;
+        
+        let isUnilat = currentWorkout.unilateralFlags && currentWorkout.unilateralFlags[currentWorkout.currentExIndex];
+        
+        let phKg = pastSet && pastSet.kg ? pastSet.kg : "Kg"; 
+        
+        let tempBaseRep = pastSet && pastSet.reps ? pastSet.reps : "Reps";
+        let phRepsDx = pastSet && pastSet.reps ? pastSet.reps : (isUnilat ? "Dx" : "Reps");
+        let phRepsSx = pastSet && pastSet.repsSx !== undefined ? pastSet.repsSx : (isUnilat ? "Sx" : "Reps");
+        
+        let isWarmup = pastSet && pastSet.type === 'warmup'; 
+        let customPhClass = isWarmup ? "orange-placeholder" : "";
+
+        let safeKg = restoreKg !== undefined && restoreKg !== null ? restoreKg : "";
+        let safeReps = restoreReps !== undefined && restoreReps !== null ? restoreReps : "";
+        let safeRepsSx = restoreRepsSx !== undefined && restoreRepsSx !== null ? restoreRepsSx : "";
+
+        const div = document.createElement('div'); 
+        div.className = `set-row type-${tipoAtteso}`; 
+        div.dataset.type = tipoAtteso;
+        
+        if (pastSet) {
+            div.dataset.pastKg = pastSet.kg !== undefined ? pastSet.kg : "";
+            let rMax = parseInt(pastSet.reps || 0);
+            if (pastSet.repsSx !== undefined) rMax = Math.min(rMax, parseInt(pastSet.repsSx || 0));
+            div.dataset.pastReps = rMax !== 0 ? rMax : "";
+        }
+        
+        let btnWarmup = tipoAtteso !== 'drop' ? `<button class="action-btn ${tipoAtteso === 'warmup' ? 'active-w' : ''}" onclick="toggleWarmup(this)">W</button>` : '';
+        let btnDrop = tipoAtteso !== 'drop' ? `<button class="action-btn" style="background:#bf5af2;" onclick="aggiungiSerie('drop'); salvaStatoWorkout();">↳D</button>` : '';
+
+        if (isUnilat) {
+            div.innerHTML = `
+                <div class="set-main">
+                    <span class="set-number" style="width:25px; font-weight:bold; color: var(--text-sec); text-align:center;">${setNumStr}</span>
+                    <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${safeKg}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" placeholder="Dx ${phRepsDx !== 'Dx' ? phRepsDx : ''}" class="reps-input reps-input-dx ${customPhClass}" value="${safeReps}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" placeholder="Sx ${phRepsSx !== 'Sx' ? phRepsSx : ''}" class="reps-input reps-input-sx ${customPhClass}" value="${safeRepsSx}" oninput="controllaCompletamentoRiga(this)">
+                    <div class="set-controls">
+                        ${btnWarmup}${btnDrop}
+                        <button class="action-btn danger-btn" onclick="rimuoviSerie(this)">X</button>
+                    </div>
+                </div>
+                <div class="set-feedback" style="display:none;"></div>
+            `;
+        } else {
+            div.innerHTML = `
+                <div class="set-main">
+                    <span class="set-number" style="width:25px; font-weight:bold; color: var(--text-sec); text-align:center;">${setNumStr}</span>
+                    <input type="number" step="0.5" placeholder="${phKg}" class="kg-input ${customPhClass}" value="${safeKg}" oninput="controllaCompletamentoRiga(this)">
+                    <input type="number" placeholder="${tempBaseRep}" class="reps-input ${customPhClass}" value="${safeReps}" oninput="controllaCompletamentoRiga(this)">
+                    <div class="set-controls">
+                        ${btnWarmup}${btnDrop}
+                        <button class="action-btn danger-btn" onclick="rimuoviSerie(this)">X</button>
+                    </div>
+                </div>
+                <div class="set-feedback" style="display:none;"></div>
+            `;
+        }
+        
+        if (safeKg !== "" && safeReps !== "" && (!isUnilat || (isUnilat && safeRepsSx !== ""))) {
+            div.classList.add('completed');
+            setTimeout(() => {
+                let kgInput = div.querySelector('.kg-input');
+                if(kgInput && kgInput.value) controllaCompletamentoRiga(kgInput);
+            }, 50);
+        }
+
+        if (tipoAtteso === 'drop' && window.event && window.event.target) {
+            let rowOrigin = window.event.target.closest('.set-row');
+            if(rowOrigin && rowOrigin.nextSibling) container.insertBefore(div, rowOrigin.nextSibling);
+            else container.appendChild(div);
+        } else { container.appendChild(div); }
+        
+        aggiornaNumerazioneSerie();
+    }
+
+    function aggiornaNumerazioneSerie() {
+        let count = 1;
+        document.querySelectorAll('.set-row').forEach(row => { if (row.dataset.type !== 'drop') { row.querySelector('.set-number').innerText = count + "°"; count++; } });
+    }
+
+    function rimuoviSerie(btnElement) { btnElement.closest('.set-row').remove(); aggiornaNumerazioneSerie(); aggiornaBarbellMath(); salvaStatoWorkout(); }
+
+    // ===============================================
+    // LOGICA TIMER CON SUPPORTO BACKGROUND & NOTIFICA
+    // ===============================================
+    function playAudioAlert() {
+        try {
+            if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+            
+            // Doppio beep ben udibile
+            [0, 0.25, 0.5].forEach(delay => {
+                let osc = sharedAudioCtx.createOscillator();
+                let gain = sharedAudioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, sharedAudioCtx.currentTime + delay);
+                gain.gain.setValueAtTime(0.8, sharedAudioCtx.currentTime + delay);
+                gain.gain.exponentialRampToValueAtTime(0.01, sharedAudioCtx.currentTime + delay + 0.18);
+                osc.connect(gain);
+                gain.connect(sharedAudioCtx.destination);
+                osc.start(sharedAudioCtx.currentTime + delay);
+                osc.stop(sharedAudioCtx.currentTime + delay + 0.2);
+            });
+        } catch(e) { console.log("Audio non supportato."); }
+    }
+
+    function aggiornaTestoTimer(sec) {
+        let m = Math.floor(sec / 60).toString().padStart(2, '0');
+        let s = (sec % 60).toString().padStart(2, '0');
+        document.getElementById('timerDisplay').innerText = `${m}:${s}`;
+    }
+
+    function completaTimerRecupero() {
+        if (!timerEndTime) return; // Evita doppie esecuzioni
+        fermaTimer();
+        let disp = document.getElementById('timerDisplay');
+        disp.innerText = "VIA! 💪";
+        disp.style.color = "var(--success)";
+        setTimeout(() => { if(!timerEndTime) { disp.innerText = "00:00"; disp.style.color = "var(--primary)"; } }, 3500);
+
+        if(navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 400]);
+        playAudioAlert();
+
+        let exCorrente = currentWorkout.exercises[currentWorkout.currentExIndex] || "Esercizio";
+        inviaNotificaSistema("⏱️ Recupero Terminato!", `È il momento della prossima serie di ${exCorrente}!`);
+    }
+
+    function fermaTimer() {
+        clearInterval(timerInterval);
+        if (timerWorker) timerWorker.postMessage({ cmd: 'stop' });
+        timerEndTime = null;
+        let disp = document.getElementById('timerDisplay');
+        disp.innerText = "00:00";
+        disp.style.color = "var(--primary)";
+    }
+
+    function avviaTimer(secondi) {
+        // Sblocca il contesto audio al tocco dell'utente e richiede il permesso notifiche
+        try {
+            if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+        } catch(e) {}
+        
+        richiediPermessoNotifiche(false);
+        attivaWakeLock();
+
+        clearInterval(timerInterval);
+        timerEndTime = Date.now() + (secondi * 1000);
+        document.getElementById('timerDisplay').style.color = "var(--primary)";
+        aggiornaTestoTimer(secondi);
+
+        if (timerWorker) {
+            timerWorker.postMessage({ cmd: 'start', endTime: timerEndTime });
+        } else {
+            timerInterval = setInterval(() => {
+                let remain = Math.ceil((timerEndTime - Date.now()) / 1000);
+                if(remain <= 0) {
+                    completaTimerRecupero();
+                } else {
+                    aggiornaTestoTimer(remain);
+                }
+            }, 500);
+        }
+    }
+
+    function prossimoEsercizio() {
+        salvaDatiEsercizioUI(); 
+        
+        if(currentWorkout.currentExIndex === currentWorkout.exercises.length - 1) {
+            
+            localStorage.setItem('wk_last_saved_backup', JSON.stringify(currentWorkout));
+            
+            clearInterval(totalTimerInterval); fermaTimer(); rilasciaWakeLock();
+            let dateStr = new Date().toLocaleDateString('it-IT');
+            
+            // Prepara i dati per il salvataggio: salva gli esercizi con serie compilate
+            let finalData = currentWorkout.recordedData.filter(ex => ex !== null && ex !== undefined)
+                .map(ex => {
+                    let validSets = (ex.sets || []).filter(s => s.kg !== "" && (s.reps !== "" || (s.repsSx !== undefined && s.repsSx !== ""))).map(s => ({
+                        kg: parseFloat(s.kg), 
+                        reps: parseInt(s.reps || 0), 
+                        repsSx: (s.repsSx !== undefined && s.repsSx !== "") ? parseInt(s.repsSx || 0) : undefined,
+                        type: s.type
+                    }));
+                    let normName = normalizzaNome(ex.name);
+                    let permanentNote = exerciseNotesMap[normName] !== undefined ? exerciseNotesMap[normName].trim() : (ex.notes ? ex.notes.trim() : "");
+                    return {
+                        name: ex.name,
+                        notes: permanentNote,
+                        sets: validSets
+                    };
+                }).filter(ex => ex.sets.length > 0);
+
+            if(finalData.length === 0) {
+                alert("Nessuna serie valida inserita. Le note degli esercizi sono comunque rimaste salvate!");
+                pulisciStatoWorkout(); switchView('view-dashboard');
+                return;
+            }
+
+            if (!currentWorkout.isDeload) {
+                historyData.push({ 
+                    date: dateStr, 
+                    routine: currentWorkout.routineName, 
+                    routineColor: currentWorkout.routineColor, 
+                    data: finalData 
+                });
+                localStorage.setItem('wk_history', JSON.stringify(historyData));
+            } else {
+                alert("🧘 Allenamento di Scarico terminato!\n\nI dati sono stati elaborati dall'AI Coach, ma non sono stati salvati nel Database Storico per non intaccare le tue metriche e grafici di prestazione massimale.");
+            }
+            
+            pulisciStatoWorkout();
+            localStorage.removeItem('wk_closed_session_backup'); 
+            
+            generaReportAIPostWorkout(finalData);
+
+        } else {
+            currentWorkout.currentExIndex++;
+            caricaEsercizioCorrente();
+        }
+    }
+
+    function annullaWorkout() {
+        if(confirm("Vuoi annullare e chiudere questo allenamento? Potrai ripristinarlo in un secondo momento.")) {
+            salvaStatoWorkout();
+            localStorage.setItem('wk_closed_session_backup', localStorage.getItem('wk_active_session'));
+            localStorage.removeItem('wk_last_saved_backup');
+            clearInterval(totalTimerInterval); fermaTimer(); pulisciStatoWorkout(); switchView('view-dashboard');
+        }
+    }
+
+    function esportaBackup() {
+        const dataStr = JSON.stringify({ routines: routines, history: historyData, map: userMuscleMap, notes: exerciseNotesMap, progression: progressionSettings }, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = `backup_allenamento_${new Date().toLocaleDateString('it-IT').replace(/\//g, '-')}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    function importaBackup(event) {
+        const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const importato = JSON.parse(e.target.result);
+                if (importato.routines && importato.history) {
+                    routines = importato.routines; historyData = importato.history;
+                    if (importato.map) { userMuscleMap = importato.map; localStorage.setItem('wk_muscle_map', JSON.stringify(userMuscleMap)); }
+                    if (importato.notes) { exerciseNotesMap = importato.notes; localStorage.setItem('wk_exercise_notes', JSON.stringify(exerciseNotesMap)); }
+                    if (importato.progression) { progressionSettings = importato.progression; localStorage.setItem('wk_progression_settings', JSON.stringify(progressionSettings)); }
+                    localStorage.setItem('wk_routines', JSON.stringify(routines)); localStorage.setItem('wk_history', JSON.stringify(historyData));
+                    renderDashboard(); alert("Dati importati!");
+                }
+            } catch (error) { alert("Errore lettura file."); } event.target.value = "";
+        }; reader.readAsText(file);
+    }
+
+    // ===============================================
+    // LOGICA AI MIX, FEEDBACK AUTOMATICO E RECAP ESERCIZI FATTI
+    // ===============================================
+
+    function generaMixAI() {
+        let isDeloadActive = document.getElementById('deloadToggle') ? document.getElementById('deloadToggle').checked : false;
+
+        let oggi = new Date();
+        let giornoSettimana = oggi.getDay(); 
+        let diffGiorni = oggi.getDate() - giornoSettimana + (giornoSettimana === 0 ? -6 : 1);
+        let lunediCorrente = new Date(oggi.setDate(diffGiorni));
+        lunediCorrente.setHours(0, 0, 0, 0); 
+        
+        let volumiSettimanali = { "Glutei": 0, "Femorali": 0, "Quadricipiti": 0, "Dorso": 0, "Pettorali": 0, "Spalle": 0, "Bicipiti": 0, "Tricipiti": 0, "Addome": 0 };
+        
+        historyData.forEach(session => {
+            let partiData = session.date.split('/'); 
+            if(partiData.length === 3) {
+                let dataSessione = new Date(`${partiData[2]}-${partiData[1]}-${partiData[0]}`);
+                dataSessione.setHours(0, 0, 0, 0);
+                
+                if (dataSessione >= lunediCorrente) {
+                    session.data.forEach(ex => {
+                        let gruppo = ottieniGruppoMuscolare(ex.name);
+                        if (volumiSettimanali[gruppo] !== undefined) {
+                            let serieValide = (ex.sets || []).filter(s => s.type !== 'warmup' && s.kg !== "").length;
+                            volumiSettimanali[gruppo] += serieValide;
+                        }
+                    });
+                }
+            }
+        });
+
+        let gruppiCarenti = Object.keys(volumiSettimanali)
+            .filter(g => volumiSettimanali[g] < 8)
+            .sort((a, b) => volumiSettimanali[a] - volumiSettimanali[b]);
+        
+        if (gruppiCarenti.length === 0) return alert("Hai volumi perfetti su tutto questa settimana! Scegli una scheda normale o riposa.");
+
+        let eserciziScelti = [];
+        let tuttiEsercizi = ottieniListaEserciziUnici();
+        
+        gruppiCarenti.slice(0, 3).forEach(gruppo => {
+            let opzioni = tuttiEsercizi.filter(ex => ottieniGruppoMuscolare(ex) === gruppo);
+            if (opzioni.length > 0) {
+                eserciziScelti.push(opzioni[0]); 
+                if(opzioni.length > 1 && eserciziScelti.length < 5) eserciziScelti.push(opzioni[1]); 
+            }
+        });
+
+        if (eserciziScelti.length === 0) return alert("Non ho abbastanza esercizi in archivio per generare un mix.");
+
+        let priorita = ["squat", "stacch", "rdl", "thrust", "pressa", "panca", "trazion", "lat", "extension", "curl", "abduct"];
+        eserciziScelti.sort((a, b) => {
+            let indexA = priorita.findIndex(p => a.toLowerCase().includes(p));
+            let indexB = priorita.findIndex(p => b.toLowerCase().includes(p));
+            if (indexA === -1) indexA = 99;
+            if (indexB === -1) indexB = 99;
+            return indexA - indexB;
+        });
+
+        pulisciStatoWorkout(); 
+        localStorage.removeItem('wk_closed_session_backup');
+        localStorage.removeItem('wk_last_saved_backup');
+        
+        currentWorkout = { 
+            routineName: "✨ Mix Ottimizzato A.I.", 
+            routineColor: "#bf5af2", 
+            exercises: eserciziScelti, 
+            currentExIndex: 0, 
+            recordedData: [], 
+            workoutStartTime: Date.now(),
+            isDeload: isDeloadActive,
+            unilateralFlags: {}
+        };
+        workoutStartTime = Date.now();
+        clearInterval(totalTimerInterval); totalTimerInterval = setInterval(aggiornaTimerTotale, 1000);
+        switchView('view-workout'); caricaEsercizioCorrente();
+    }
+
+    function generaReportAIPostWorkout(workoutData) {
+        let tonnellaggioTotale = 0;
+        let serieTotali = 0;
+        let repsTotalNumber = 0;
+        let feedbackOrdine = "";
+        let commentoAllenamento = "";
+        let muscoliLavorati = new Set();
+        let recapEserciziHtml = "";
+        
+        workoutData.forEach((ex, index) => {
+            let gruppo = ottieniGruppoMuscolare(ex.name);
+            let coloreGruppo = ottieniColoreHEX(gruppo);
+            muscoliLavorati.add(gruppo);
+            
+            let volEx = 0;
+            let listSetsHtml = (ex.sets || []).map((s, idx) => {
+                let tr = parseInt(s.reps || 0);
+                if(s.repsSx !== undefined) tr += parseInt(s.repsSx || 0);
+                
+                if (s.type !== 'warmup' && s.kg && s.reps) {
+                    let v = parseFloat(s.kg) * tr;
+                    tonnellaggioTotale += v;
+                    volEx += v;
+                    repsTotalNumber += tr;
+                    serieTotali++;
+                }
+
+                let prefs = s.type === 'warmup' ? 'W' : (s.type === 'drop' ? '↳D' : `S${idx+1}`);
+                let tagColor = s.type === 'warmup' ? 'var(--warmup)' : (s.type === 'drop' ? 'var(--drop)' : 'var(--text)');
+                let repStr = s.repsSx !== undefined ? `${s.reps}/${s.repsSx}` : s.reps;
+                return `<span style="color:${tagColor}; display:inline-block; margin-right:10px; font-size:13px;"><b>${prefs}:</b> ${repStr} × ${s.kg}kg</span>`;
+            }).join('');
+
+            let notaExHtml = ex.notes ? `<div style="font-size:12px; color:var(--text-sec); margin-top:6px; font-style:italic;">📌 ${ex.notes}</div>` : '';
+
+            recapEserciziHtml += `
+                <div class="recap-ex-card" style="border-left-color: ${coloreGruppo};">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <b style="font-size:15px; color:white;">${index + 1}. ${ex.name}</b>
+                        <span style="font-size:12px; color:var(--warning); font-weight:bold;">${volEx.toFixed(0)} kg</span>
+                    </div>
+                    <div style="line-height:1.5;">${listSetsHtml}</div>
+                    ${notaExHtml}
+                </div>
+            `;
+
+            if (index > 0) {
+                let exPrecedente = workoutData[index - 1].name.toLowerCase();
+                let exAttuale = ex.name.toLowerCase();
+                if ((exPrecedente.includes("extension") || exPrecedente.includes("curl") || exPrecedente.includes("abduction") || exPrecedente.includes("kick")) && 
+                    (exAttuale.includes("squat") || exAttuale.includes("thrust") || exAttuale.includes("stacch") || exAttuale.includes("rdl"))) {
+                    feedbackOrdine = `⚠️ <b>Attenzione all'ordine:</b> Hai fatto "${ex.name}" dopo un esercizio di isolamento. Per spingere carichi massimali, metti prima gli esercizi pesanti.`;
+                }
+            }
+        });
+
+        let repsMedie = serieTotali > 0 ? (repsTotalNumber / serieTotali) : 0;
+        if (serieTotali < 6) {
+            commentoAllenamento = "Hai registrato poche serie allenanti in questa seduta. Se avevi previsto altro lavoro, controlla che non manchino serie da inserire.";
+        } else if (serieTotali <= 16) {
+            commentoAllenamento = "Seduta registrata. Per capire se stai migliorando, confronta carichi e ripetizioni degli stessi esercizi nelle prossime esposizioni.";
+        } else {
+            commentoAllenamento = "Hai registrato molte serie allenanti. Controlla che la qualità delle serie e il rendimento restino buoni anche nelle sedute successive.";
+        }
+        if (muscoliLavorati.has("Glutei")) {
+            commentoAllenamento += " Hai incluso lavoro per i glutei in questa seduta.";
+        }
+
+        let htmlReport = `
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h2 style="margin:0; color: var(--success);">Ottimo Lavoro! 🎉</h2>
+                <p style="color: var(--text-sec); font-size: 14px; margin: 4px 0 0 0;">${currentWorkout.routineName} • Tempo: ${document.getElementById('totalWorkoutTimer').innerText}</p>
+            </div>
+            
+            <div style="background: #2c2c2e; border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid #3a3a3c;">
+                <h4 style="margin: 0 0 10px 0; color: var(--primary);">📊 Statistiche Sessione</h4>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #3a3a3c; padding-bottom: 8px; margin-bottom: 8px;">
+                    <span>Volume Load Totale:</span> <b style="color: var(--warning);">${tonnellaggioTotale.toFixed(1)} kg</b>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #3a3a3c; padding-bottom: 8px; margin-bottom: 8px;">
+                    <span>Serie Allenanti:</span> <b>${serieTotali}</b>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Ripetizioni medie / serie:</span> <b style="color: var(--drop);">${repsMedie.toFixed(1)}</b>
+                </div>
+            </div>
+
+            <!-- SEZIONE RECAP ESERCIZI SVOLTI -->
+            <div style="margin-bottom: 15px;">
+                <h4 style="margin: 0 0 10px 0; color: var(--text); font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">📋 Recap Esercizi Svolti (${workoutData.length})</h4>
+                ${recapEserciziHtml}
+            </div>
+
+            <div style="background: rgba(10, 132, 255, 0.1); border-left: 4px solid var(--primary); padding: 15px; border-radius: 0 12px 12px 0; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 8px 0; color: var(--primary);">🧠 Feedback automatico</h4>
+                <p style="margin: 0 0 10px 0; font-size: 13px; line-height: 1.4;">
+                    Muscoli colpiti: <b>${Array.from(muscoliLavorati).join(', ')}</b>.<br><br>
+                    ${feedbackOrdine ? feedbackOrdine : "✅ Ordine biomeccanico corretto."}
+                </p>
+                <p style="margin: 0; font-size: 14px; font-weight: 500; color: #fff; line-height: 1.4;">
+                    💬 "${commentoAllenamento}"
+                </p>
+            </div>
+            
+            <button class="warning" style="margin-bottom: 10px; color: black;" onclick="tornaIndietroAlWorkout()">↩️ Torna all'Allenamento (Modifica)</button>
+            <button class="success" onclick="chiudiModale(); switchView('view-dashboard');">Salva e Chiudi</button>
+        `;
+
+        document.getElementById('modalTitle').innerText = "Report di Fine Allenamento";
+        document.getElementById('modalBody').innerHTML = htmlReport;
+        document.getElementById('dataModal').classList.add('active');
+    }
+
+    // ===============================================
+    // LOGICA AI CAMERA TRACKER
+    // ===============================================
+
+    let detector;
+    let cameraStream;
+    let aiAnimFrame;
+    let repCount = 0;
+    let repState = "up"; 
+    let isAiRunning = false;
+    let currentAiMode = 'rdl'; 
+
+    function apriMenuSelezioneAi() {
+        document.getElementById('aiSetupModal').classList.add('active');
+    }
+
+    function calcolaAngolo(a, b, c) {
+        let radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+        let angle = Math.abs(radians * 180.0 / Math.PI);
+        if (angle > 180.0) angle = 360 - angle;
+        return angle;
+    }
+
+    async function avviaAiCamera() {
+        currentAiMode = document.getElementById('aiExerciseTypeSelect').value;
+        document.getElementById('aiSetupModal').classList.remove('active');
+        document.getElementById('aiModal').classList.add('active');
+        
+        const video = document.getElementById('aiVideo');
+        repCount = 0;
+        repState = "up";
+        document.getElementById('aiRepCount').innerText = repCount;
+        document.getElementById('aiStateBadge').innerText = "Caricamento AI...";
+        document.getElementById('aiStateBadge').style.background = "var(--warning)";
+        
+        try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'user', width: 640, height: 480 } 
+            });
+            video.srcObject = cameraStream;
+            
+            await new Promise((resolve) => { video.onloadedmetadata = () => resolve(video); });
+            video.play();
+            
+            const detectorConfig = { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING };
+            detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, detectorConfig);
+            
+            isAiRunning = true;
+            document.getElementById('aiStateBadge').innerText = "Pronto - Inquadrati di profilo!";
+            rilevaPosa(); 
+            
+        } catch (e) {
+            alert("Errore fotocamera: Inquadratura negata o non supportata dal browser.");
+            chiudiAiCamera();
+        }
+    }
+
+    async function rilevaPosa() {
+        if (!isAiRunning) return;
+        
+        const video = document.getElementById('aiVideo');
+        const canvas = document.getElementById('aiCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        try {
+            const poses = await detector.estimatePoses(video);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (poses.length > 0) {
+                const keypoints = poses[0].keypoints;
+                const confidenceThreshold = 0.4;
+                
+                keypoints.forEach(point => {
+                    if (point.score > confidenceThreshold) {
+                        ctx.beginPath();
+                        ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
+                        ctx.fillStyle = "var(--drop)";
+                        ctx.fill();
+                    }
+                });
+                
+                let ptA, ptB, ptC;
+                let stateBadge = document.getElementById('aiStateBadge');
+                
+                if (currentAiMode === 'rdl') {
+                    ptA = keypoints.find(k => k.name === 'left_shoulder');
+                    ptB = keypoints.find(k => k.name === 'left_hip');
+                    ptC = keypoints.find(k => k.name === 'left_knee');
+                    
+                    if (ptA && ptB && ptC && ptA.score > confidenceThreshold && ptB.score > confidenceThreshold && ptC.score > confidenceThreshold) {
+                        disegnaLinee(ctx, ptA, ptB, ptC);
+                        let angle = calcolaAngolo(ptA, ptB, ptC);
+                        
+                        if (angle < 110) { 
+                            repState = "down"; 
+                            aggiornaBadge(stateBadge, "Giù", "var(--danger)"); 
+                        }
+                        if (angle > 155 && repState === "down") { 
+                            registraRipetizione(stateBadge, "Su"); 
+                        }
+                    } else {
+                        aggiornaBadge(stateBadge, "Inquadra Anca e Ginocchio!", "var(--warning)");
+                    }
+                } 
+                else if (currentAiMode === 'pullup') {
+                    ptA = keypoints.find(k => k.name === 'left_shoulder');
+                    ptB = keypoints.find(k => k.name === 'left_elbow');
+                    ptC = keypoints.find(k => k.name === 'left_wrist');
+                    
+                    if (ptA && ptB && ptC && ptA.score > confidenceThreshold && ptB.score > confidenceThreshold && ptC.score > confidenceThreshold) {
+                        disegnaLinee(ctx, ptA, ptB, ptC);
+                        let angle = calcolaAngolo(ptA, ptB, ptC);
+                        
+                        if (angle > 140) { 
+                            repState = "down"; 
+                            aggiornaBadge(stateBadge, "Braccia Tese", "var(--danger)"); 
+                        }
+                        if (angle < 90 && repState === "down") { 
+                            registraRipetizione(stateBadge, "Trazione Chiusa"); 
+                        }
+                    } else {
+                        aggiornaBadge(stateBadge, "Inquadra il braccio!", "var(--warning)");
+                    }
+                }
+                else if (currentAiMode === 'pushup') {
+                    ptA = keypoints.find(k => k.name === 'left_shoulder');
+                    ptB = keypoints.find(k => k.name === 'left_elbow');
+                    ptC = keypoints.find(k => k.name === 'left_wrist');
+                    
+                    if (ptA && ptB && ptC && ptA.score > confidenceThreshold && ptB.score > confidenceThreshold && ptC.score > confidenceThreshold) {
+                        disegnaLinee(ctx, ptA, ptB, ptC);
+                        let angle = calcolaAngolo(ptA, ptB, ptC);
+                        
+                        if (angle < 90) { 
+                            repState = "down"; 
+                            aggiornaBadge(stateBadge, "Bilanciere al petto", "var(--danger)"); 
+                        }
+                        if (angle > 150 && repState === "down") { 
+                            registraRipetizione(stateBadge, "Spinta Chiusa"); 
+                        }
+                    } else {
+                        aggiornaBadge(stateBadge, "Inquadra il braccio!", "var(--warning)");
+                    }
+                }
+            }
+        } catch(err) {
+            // Ignora errori di frame
+        }
+        
+        aiAnimFrame = requestAnimationFrame(rilevaPosa);
+    }
+
+    function disegnaLinee(ctx, a, b, c) {
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y);
+        ctx.strokeStyle = "var(--success)"; ctx.lineWidth = 4; ctx.stroke();
+    }
+    
+    function aggiornaBadge(el, text, color) {
+        if(el.innerText !== text) { el.innerText = text; el.style.background = color; }
+    }
+
+    function registraRipetizione(badgeEl, text) {
+        repState = "up"; repCount++; document.getElementById('aiRepCount').innerText = repCount;
+        aggiornaBadge(badgeEl, text, "var(--success)");
+        if (navigator.vibrate) navigator.vibrate(100);
+    }
+
+    function chiudiAiCamera() {
+        isAiRunning = false;
+        cancelAnimationFrame(aiAnimFrame);
+        if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+        document.getElementById('aiModal').classList.remove('active');
+    }
+
+    function trasferisciReps() {
+        let rows = document.querySelectorAll('#setsContainer .set-row');
+        if (rows.length > 0) {
+            let lastRow = rows[rows.length - 1];
+            let isUnilatRow = lastRow.querySelector('.reps-input-dx') !== null;
+            let repInput = isUnilatRow ? lastRow.querySelector('.reps-input-dx') : lastRow.querySelector('.reps-input');
+            if(repInput) {
+                repInput.value = repCount;
+                controllaCompletamentoRiga(repInput);
+            }
+        } else {
+            aggiungiSerie('normal', null, "", repCount);
+            salvaStatoWorkout();
+        }
+        chiudiAiCamera();
+    }
+</script>
+</body>
+</html>
